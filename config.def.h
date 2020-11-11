@@ -1,5 +1,5 @@
-static char BLOCK_SEP[] = " ";
-static char GROUP_SEP[] = " | ";
+static char const BLOCK_SEP[] = " ";
+static char const GROUP_SEP[] = " | ";
 
 static Block BAR[] = {
 	{ 1, NULL, block_alsa },
