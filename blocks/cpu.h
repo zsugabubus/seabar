@@ -11,7 +11,7 @@ BLOCK(cpu)
 		unsigned long long total, idle;
 	} *state;
 
-	char buf[200];
+	char buf[8192];
 
 	if (!(state = b->state.ptr)) {
 		if (!(state = b->state.ptr = malloc(sizeof(*state))))
@@ -30,13 +30,7 @@ BLOCK(cpu)
 		}
 	}
 
-	char *p;
-	unsigned i;
-	unsigned long long new_total, delta_total;
-	unsigned long long new_idle = new_idle, delta_idle;
-	unsigned char percent;
-
-	while (-1 == pread(state->fd, buf, sizeof buf, sizeof "cpu "/* skip it */)) {
+	while (-1 == pread(state->fd, buf, sizeof buf, 0)) {
 		if (EINTR == errno)
 			continue;
 
@@ -45,8 +39,16 @@ BLOCK(cpu)
 		return;
 	}
 
-	new_total = 0ULL, new_idle = 0ULL;
-	for (p = buf, i = 0; '\n' != *p; ++i) {
+	char *p = buf;
+	for (size_t skip_nl = b->arg.num + 1; skip_nl--;)
+		p = strchr(p, '\n') + 1;
+	p += sizeof("cpu");
+	p = strchr(p, ' ') + 1;
+
+	unsigned long long new_total = 0, delta_total;
+	unsigned long long new_idle = 0, delta_idle;
+
+	for (uint8_t i = 0; '\n' != *p; ++i) {
 		unsigned long long const val = strtoull(p, &p, 10);
 		new_total += val;
 		switch (i) {
@@ -58,7 +60,7 @@ BLOCK(cpu)
 
 	delta_idle = new_idle - state->idle;
 	if (0 < (delta_total = new_total - state->total)) {
-		percent = 100 - ((100ULL * delta_idle) / delta_total);
+		uint8_t const percent = 100 - ((100ULL * delta_idle) / delta_total);
 		sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT, percent);
 	}
 

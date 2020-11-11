@@ -25,8 +25,7 @@ block_fsstat_worker(void *arg)
 		if (EACCES == errno || ENOENT == errno)
 			*b->buf = '\0';
 		else
-			fprintf(stderr, "failed to stat filesystem at %s: %s",
-					pathname, strerror(errno));
+			block_str_strerror("failed to stat filesystem");
 		goto out;
 	}
 
@@ -54,7 +53,7 @@ BLOCK(fsstat)
 {
 	pthread_t thread;
 
-	struct pollfd *pfd = &fds[b - BAR];
+	struct pollfd *pfd = BLOCK_POLLFD;
 	if (pfd->fd < 0) {
 		int pair[2];
 

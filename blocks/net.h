@@ -56,7 +56,7 @@ BLOCK(net)
 	};
 	static int msg_seq = 0;
 
-	static int sfd, nlfd;
+	static int sfd;
 
 	if (!iov.iov_base) {
 		iov.iov_len = sysconf(_SC_PAGESIZE);
@@ -66,14 +66,6 @@ BLOCK(net)
 
 		if (-1 == sfd)
 			sfd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_IP);
-
-		if (-1 == (nlfd = socket(AF_NETLINK, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC, NETLINK_ROUTE)))
-			return;
-
-		setsockopt(nlfd, SOL_NETLINK, NETLINK_EXT_ACK, (int[]){ 1 }, sizeof(int));
-
-		if (-1 == bind(nlfd, (struct sockaddr *)&nlsa, sizeof nlsa))
-			return;
 	}
 
 	struct nlmsghdr *nlh = (struct nlmsghdr *)iov.iov_base;
@@ -81,7 +73,7 @@ BLOCK(net)
 	struct ifinfomsg *ifi;
 	struct rtattr *rta;
 
-	struct iwreq iwr;
+	int nlfd;
 
 	if (!(state = b->state.ptr)) {
 		if (!(state = b->state.ptr = malloc(sizeof *state)))
@@ -98,12 +90,19 @@ BLOCK(net)
 		state->symbol = L"\0";
 
 		if (!(state->if_index = if_nametoindex(if_name))) {
-			fprintf(stderr, "failed to find interface: %s\n",
-					strerror(errno));
+			block_str_strerror("failed to find interface");
 			return;
 		}
 
-		struct pollfd *pfd = &fds[b - BAR];
+		struct pollfd *pfd = BLOCK_POLLFD;
+		if (-1 == (nlfd = socket(AF_NETLINK, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC, NETLINK_ROUTE)))
+			return;
+
+		setsockopt(nlfd, SOL_NETLINK, NETLINK_EXT_ACK, (int[]){ true }, sizeof(int));
+
+		if (-1 == bind(nlfd, (struct sockaddr *)&nlsa, sizeof nlsa))
+			return;
+
 		pfd->fd = nlfd;
 		pfd->events = POLLIN;
 
@@ -116,7 +115,7 @@ BLOCK(net)
 		ifa = NLMSG_DATA(nlh);
 		ifa->ifa_family = AF_UNSPEC;
 		ifa->ifa_prefixlen = 0;
-		ifa->ifa_flags = 0/*must be zero*/;
+		ifa->ifa_flags = 0/* must be zero */;
 		ifa->ifa_scope = RT_SCOPE_UNIVERSE;
 		ifa->ifa_index = state->if_index;
 
@@ -124,6 +123,8 @@ BLOCK(net)
 		if (-1 == sendto(nlfd, nlh, nlh->nlmsg_len, 0, NULL, 0))
 			perror("sendto()");
 		setsockopt(nlfd, SOL_NETLINK, NETLINK_GET_STRICT_CHK, (int[]){ false }, sizeof(int));
+	} else {
+		nlfd = BLOCK_POLLFD->fd;
 	}
 
 	nlh->nlmsg_type = RTM_GETLINK;
@@ -134,7 +135,7 @@ BLOCK(net)
 
 	ifi = NLMSG_DATA(nlh);
 	ifi->ifi_family = AF_UNSPEC; /* AF_PACKET */
-	ifi->ifi_type = 0; /* ARPHDR_NETROM */
+	ifi->ifi_type = ARPHRD_NETROM;
 	ifi->ifi_index = state->if_index;
 	ifi->ifi_flags = 0;
 	ifi->ifi_change = 0xFFffFFff; /* 0 */
@@ -143,8 +144,6 @@ BLOCK(net)
 		perror("sendto()");
 
 	b->timeout = 4;
-
-	strncpy(iwr.ifr_name, if_name, IF_NAMESIZE - 1);
 
 	uint64_t rx_bytes = state->last_rx_bytes, tx_bytes = state->last_tx_bytes;
 
@@ -163,12 +162,9 @@ BLOCK(net)
 			case NLMSG_DONE:
 				continue;
 
-			case NLMSG_ERROR:
-				fprintf(stderr, "NLMSG_ERROR\n");
-				continue;
-
 			case RTM_NEWLINK:
 			case RTM_GETLINK:
+			{
 				ifi = NLMSG_DATA(nlh);
 				/* We receive events for other interfaces too. */
 				if (state->if_index != (unsigned)ifi->ifi_index)
@@ -179,17 +175,15 @@ BLOCK(net)
 				ifa = NULL;
 
 				switch (ifi->ifi_type) {
-				case ARPHRD_ETHER:
-					state->symbol = L" ";
-					break;
-				default:
-					state->symbol = L"ﯱ ";
-					break;
+				case ARPHRD_ETHER: state->symbol = L" "; break;
+				default:           state->symbol = L"ﯱ "; break;
 				}
 
 				*state->essid = '\0';
 				*state->szlink_speed = '\0';
 
+				struct iwreq iwr;
+				strncpy(iwr.ifr_name, if_name, sizeof iwr.ifr_name);
 				/* is wireless? */
 				if (!ioctl(sfd, SIOCGIWNAME, &iwr)) {
 					struct iw_statistics iwstat;
@@ -216,6 +210,7 @@ BLOCK(net)
 						fmt_speed(state->szlink_speed, iwr.u.bitrate.value);
 
 				}
+			}
 				break;
 
 			case RTM_NEWADDR:
@@ -278,30 +273,35 @@ BLOCK(net)
 	}
 
 	switch (state->if_state) {
+	case IF_OPER_UNKNOWN: /* for loopback */
 	case IF_OPER_UP:
 	case IF_OPER_DORMANT:
 	{
 		uint64_t const elapsed_ns = elapsed.tv_sec * NSEC_PER_SEC + elapsed.tv_nsec;
+		uint64_t rx_rate, tx_rate;
 		if (0 < elapsed_ns) {
-			uint64_t rx_rate = (rx_bytes - state->last_rx_bytes) * NSEC_PER_SEC / elapsed_ns,
-			         tx_rate = (tx_bytes - state->last_tx_bytes) * NSEC_PER_SEC / elapsed_ns;
-
-			char szrx_rate[5], sztx_rate[5];
-			char szrx[5], sztx[5];
-
-			szrx[fmt_speed(szrx, rx_bytes)] = '\0';
-			sztx[fmt_speed(sztx, tx_bytes)] = '\0';
-			szrx_rate[fmt_speed(szrx_rate, rx_rate)] = '\0';
-			sztx_rate[fmt_speed(sztx_rate, tx_rate)] = '\0';
-
-			sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT,
-				state->symbol,
-				state->essid,
-				(*state->essid ? " " : ""),
-				(*state->szip_addr ? state->szip_addr : *state->szip6_addr > 0 ? state->szip6_addr : state->szmac_addr),
-				szrx, szrx_rate,
-				sztx, sztx_rate);
+			rx_rate = (rx_bytes - state->last_rx_bytes) * NSEC_PER_SEC / elapsed_ns;
+			tx_rate = (tx_bytes - state->last_tx_bytes) * NSEC_PER_SEC / elapsed_ns;
+		} else {
+			rx_rate = 0;
+			tx_rate = 0;
 		}
+
+		char szrx_rate[5], sztx_rate[5];
+		char szrx[5], sztx[5];
+
+		szrx[fmt_speed(szrx, rx_bytes)] = '\0';
+		sztx[fmt_speed(sztx, tx_bytes)] = '\0';
+		szrx_rate[fmt_speed(szrx_rate, rx_rate)] = '\0';
+		sztx_rate[fmt_speed(sztx_rate, tx_rate)] = '\0';
+
+		sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT,
+			state->symbol,
+			state->essid,
+			(*state->essid ? " " : ""),
+			(*state->szip_addr ? state->szip_addr : *state->szip6_addr > 0 ? state->szip6_addr : state->szmac_addr),
+			szrx, szrx_rate,
+			sztx, sztx_rate);
 
 		state->last_rx_bytes = rx_bytes;
 		state->last_tx_bytes = tx_bytes;

@@ -24,26 +24,16 @@ BLOCK(memory)
 	*b->buf = '\0';
 
 	if (!b->state.num) {
-		while (-1 == (b->state.num = open("/proc/meminfo", O_RDONLY))) {
-			if (EINTR == errno)
-				continue;
-
-			fprintf(stderr, "failed to open /proc/meminfo: %s\n",
-					strerror(errno));
+		if (-1 == (b->state.num = open("/proc/meminfo", O_RDONLY))) {
+			block_strerrorf("failed to open %s", "/proc/meminfo");
 			return;
 		}
 	}
 
 	char buf[1024];
 
-	while (-1 == pread(b->state.num, buf, sizeof buf - 1, 0)) {
-		if (EINTR == errno)
-			continue;
-
-		fprintf(stderr, "failed to read /proc/meminfo: %s\n",
-				strerror(errno));
+	if (-1 == pread(b->state.num, buf, sizeof buf - 1, 0))
 		return;
-	}
 
 	size_t i;
 	char *p;

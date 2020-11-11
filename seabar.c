@@ -14,11 +14,23 @@
 #define BLOCK(name) \
 	static void block_##name(Block *const b)
 
+#define BLOCK_POLLFD (&fds[b - blocks])
+
 #define ARRAY_SIZE(x) (sizeof x / sizeof *x)
 
 #define NSEC_PER_SEC UINT64_C(1000000000)
 #define TS_SEC(sec) (struct timespec){ .tv_sec = (sec), .tv_nsec = 0 }
 #define TS_ZERO TS_SEC(0)
+
+#define block_errorf(msg, ...) fprintf(stderr, "[%s] " msg "\n", __FUNCTION__, __VA_ARGS__)
+#define block_str_errorf(msg, ...) fprintf(stderr, "[%s \"%s\"] " msg "\n", __FUNCTION__, b->arg.str, __VA_ARGS__)
+#define block_num_errorf(msg, ...) fprintf(stderr, "[%s %d] " msg "\n", __FUNCTION__, b->arg.num)
+
+#define block_strerror(msg) block_errorf(msg ": %s", strerror(errno))
+#define block_str_strerror(msg) block_str_errorf(msg ": %s", strerror(errno))
+
+#define block_strerrorf(msg, ...) block_errorf(msg ": %s", __VA_ARGS__, strerror(errno))
+#define block_str_strerrorf(msg, ...) block_str_errorf(msg ": %s", __VA_ARGS__, strerror(errno))
 
 static pthread_rwlock_t buf_lock = PTHREAD_RWLOCK_INITIALIZER;
 
@@ -36,15 +48,15 @@ struct block {
 	char buf[128];
 };
 
-static Block BAR[];
-static struct pollfd fds[];
+static size_t num_blocks;
+static Block *blocks;
+static struct pollfd *fds;
+/* static struct pollfd fds[]; */
 
 static struct timespec elapsed;
 
 #include "config.blocks.h"
 #include "config.h"
-
-static struct pollfd fds[ARRAY_SIZE(BAR)];
 
 int
 ts_cmp(struct timespec const *const __restrict__ lhs, struct timespec const *const __restrict__ rhs)
@@ -64,10 +76,17 @@ ts_sub(struct timespec *const __restrict__ lhs, struct timespec const *const __r
 	lhs->tv_nsec = (lhs->tv_nsec < rhs->tv_nsec ? NSEC_PER_SEC : 0) + lhs->tv_nsec - rhs->tv_nsec;
 }
 
+static void
+sig_handler(int signum)
+{
+	(void)signum;
+}
+
 int
 main(int argc, char *argv[])
 {
 	sigset_t mask;
+	char stdout_buf[BUFSIZ];
 
 	struct sigaction sa;
 
@@ -80,30 +99,42 @@ main(int argc, char *argv[])
 	sa.sa_handler = SIG_IGN;
 	sigaction(SIGPIPE, &sa, NULL);
 
+	sa.sa_handler = sig_handler;
+	sigaction(SIGWINCH, &sa, NULL);
+
 	sigfillset(&mask);
-	sigdelset(&mask, SIGPIPE);
-	sigdelset(&mask, SIGINT);
+	sigdelset(&mask, SIGCHLD);
 	sigdelset(&mask, SIGHUP);
+	sigdelset(&mask, SIGINT);
+	sigdelset(&mask, SIGKILL);
 	pthread_sigmask(SIG_SETMASK, &mask, NULL);
 
 	setlocale(LC_ALL, "");
+	setvbuf(stdout, stdout_buf, _IOFBF, sizeof stdout_buf);
 
 	struct timespec timeout = TS_ZERO;
 
-	for (size_t i = 0; i < ARRAY_SIZE(BAR); ++i)
+	init();
+
+	if (!fds)
+		fds = malloc(num_blocks * sizeof *fds);
+	for (size_t i = 0; i < num_blocks; ++i)
 		fds[i].fd = -1;
 
 	sigemptyset(&mask);
+	sigaddset(&mask, SIGPIPE);
+
+	fputs("\e[s", stdout);
 
 	for (;;) {
 		struct timespec start;
 
-		fputs("\r", stdout);
+		fputs("\e[u", stdout);
 
 		pthread_rwlock_wrlock(&buf_lock);
 		unsigned group = 0;
-		for (size_t i = 0; i < ARRAY_SIZE(BAR); ++i) {
-			Block *const b = &BAR[i];
+		for (size_t i = 0; i < num_blocks; ++i) {
+			Block *const b = &blocks[i];
 
 			if (b->buf[0]) {
 				if (group)
@@ -128,7 +159,7 @@ main(int argc, char *argv[])
 			, &start);
 
 		/* fprintf(stderr, "\n\rtimeout %ld s %09ld ns", timeout.tv_sec, timeout.tv_nsec); */
-		int res = ppoll(fds, ARRAY_SIZE(fds), &timeout, &mask);
+		int res = ppoll(fds, num_blocks, &timeout, &mask);
 
 		if (0 == res) {
 			elapsed = timeout;
@@ -150,8 +181,8 @@ main(int argc, char *argv[])
 		}
 		/* fprintf(stderr, "\r\nelapsed %ld s %09lld ns\n", elapsed.tv_sec, elapsed.tv_nsec); */
 
-		for (size_t i = 0; i < ARRAY_SIZE(BAR); ++i) {
-			Block *const b = &BAR[i];
+		for (size_t i = 0; i < num_blocks; ++i) {
+			Block *const b = &blocks[i];
 
 			if (fds[i].revents || b->timeout <= elapsed.tv_sec) {
 				/* fprintf(stderr, "updating block #%d\n", i); */
