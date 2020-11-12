@@ -2,5 +2,5 @@
 
 BLOCK(text)
 {
-	strcpy(b->buf, b->arg.str);
+	strcpy(b->buf, b->format);
 }

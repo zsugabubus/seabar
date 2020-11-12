@@ -8,53 +8,120 @@
 
 #include "fourmat/fourmat.h"
 
+struct block_fsstat_state {
+	int fd;
+};
+
 static void *
 block_fsstat_worker(void *arg)
 {
-	static char const DEFAULT_FORMAT[] = "%s%s: %s%s";
-
 	Block *const b = arg;
+	DEFINE_BLOCK_STATE(struct block_fsstat_state);
 
 	struct statvfs st;
-
-	char *pathname = b->arg.str;
-	while (-1 == statvfs(pathname, &st)) {
-		if (EINTR == errno)
-			continue;
-
-		if (EACCES == errno || ENOENT == errno)
-			*b->buf = '\0';
-		else
-			block_str_strerror("failed to stat filesystem");
-		goto out;
-	}
-
-	char buf[5];
-	fmt_space(buf, st.f_bsize * st.f_bavail);
-	buf[4] = '\0';
-
-	char *id_symbol;
-	switch (st.f_fsid) {
-	case 0:  id_symbol = " "; break;
-	default: id_symbol = " "; break;
-	}
+	int const res = statvfs(b->arg, &st);
 
 	pthread_rwlock_rdlock(&buf_lock);
-	sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT, id_symbol, strrchr(b->arg.str, '/') + 1, st.f_flag & ST_RDONLY ? "*" : "", buf);
+	FORMAT_BEGIN {
+	case 'i':
+	{
+		if (-1 == res)
+			break;
+
+		char const *icon;
+		switch (st.f_fsid) {
+		case 0:  icon = " "; break;
+		default: icon = " "; break;
+		}
+		size_t const icon_size = strlen(icon);
+		memcpy(p, icon, icon_size), p += icon_size;
+	}
+		continue;
+
+	case 'n':
+	{
+		char const *name = strrchr(b->arg, '/');
+		name = name ? name + 1 : b->arg;
+		size_t const name_size = strlen(name);
+		memcpy(p, name, name_size), p += name_size;
+	}
+		continue;
+
+	case 'a':
+		if (-1 == res)
+			break;
+
+		p += fmt_space(p, st.f_bsize * st.f_bavail);
+		continue;
+
+	case 'f':
+		if (-1 == res)
+			break;
+
+		p += fmt_space(p, st.f_bsize * st.f_bfree);
+		continue;
+
+	case 't':
+		if (-1 == res)
+			break;
+
+		p += fmt_space(p, st.f_frsize * st.f_blocks);
+		continue;
+
+	case 'p':
+		if (-1 == res)
+			break;
+
+		p += fmt_percent(p, st.f_frsize * st.f_blocks - st.f_bsize * st.f_bavail, st.f_frsize * st.f_blocks);
+		continue;
+
+	case 'P':
+		if (-1 == res)
+			break;
+
+		p += fmt_percent(p, st.f_bsize * st.f_bavail, st.f_frsize * st.f_blocks);
+		continue;
+
+	case 'F':
+		if (-1 == res)
+			break;
+
+		*p++ = st.f_flag & ST_RDONLY ? '-' : 'w';
+		*p++ = st.f_flag & ST_NOEXEC ? '-' : 'x';
+		*p++ = st.f_flag & ST_NOSUID ? '-' : 's';
+		continue;
+
+	case 'c':
+		if (-1 == res)
+			break;
+
+		p += sprintf(p, "%ld", st.f_files);
+		continue;
+
+	case 'r':
+		if (-1 == res)
+			break;
+
+		if (st.f_flag & ST_RDONLY)
+			*p++ = '*';
+		continue;
+	} FORMAT_END;
 	pthread_rwlock_unlock(&buf_lock);
 
 out:
-	close(b->state.num);
+	close(state->fd);
+	BLOCK_UNINIT;
 
 	return (void *)EXIT_SUCCESS;
 }
 
-BLOCK(fsstat)
+DEFINE_BLOCK(fsstat)
 {
 	pthread_t thread;
 
 	struct pollfd *pfd = BLOCK_POLLFD;
 	if (pfd->fd < 0) {
+		DEFINE_BLOCK_STATE(struct block_fsstat_state);
 		int pair[2];
 
 		pipe(pair);
@@ -62,7 +129,7 @@ BLOCK(fsstat)
 		pfd->fd = pair[0];
 		pfd->events = POLLIN;
 
-		b->state.num = pair[1];
+		state->fd = pair[1];
 
 		pthread_create(&thread, NULL, &block_fsstat_worker, b);
 	} else {

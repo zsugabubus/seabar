@@ -2,7 +2,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-BLOCK(cpu)
+DEFINE_BLOCK(cpu)
 {
 	static char const DEFAULT_FORMAT[] = "CPU %2d%%";
 
@@ -13,10 +13,7 @@ BLOCK(cpu)
 
 	char buf[8192];
 
-	if (!(state = b->state.ptr)) {
-		if (!(state = b->state.ptr = malloc(sizeof(*state))))
-			return;
-
+	BLOCK_INIT {
 		state->total = 0;
 		state->idle = 0;
 
@@ -40,8 +37,8 @@ BLOCK(cpu)
 	}
 
 	char *p = buf;
-	for (size_t skip_nl = b->arg.num + 1; skip_nl--;)
-		p = strchr(p, '\n') + 1;
+	/* for (size_t skip_nl = b->arg.num + 1; skip_nl--;)
+		p = strchr(p, '\n') + 1; */
 	p += sizeof("cpu");
 	p = strchr(p, ' ') + 1;
 
@@ -60,8 +57,11 @@ BLOCK(cpu)
 
 	delta_idle = new_idle - state->idle;
 	if (0 < (delta_total = new_total - state->total)) {
-		uint8_t const percent = 100 - ((100ULL * delta_idle) / delta_total);
-		sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT, percent);
+		FORMAT_BEGIN {
+		case 'p':
+			p += sprintf(p, "%2d%%", 100 - ((100ULL * delta_idle) / delta_total));
+			continue;
+		} FORMAT_END;
 	}
 
 	state->idle = new_idle;

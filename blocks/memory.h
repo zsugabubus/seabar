@@ -3,9 +3,11 @@
 
 #include "fourmat/fourmat.h"
 
-BLOCK(memory)
+DEFINE_BLOCK(memory)
 {
-	static char const DEFAULT_FORMAT[] = "MEM %si/%si (%s)";
+	struct {
+		int fd;
+	} *state;
 
 #define ENTRY(name) name ":", strlen(name ":")
 
@@ -23,8 +25,9 @@ BLOCK(memory)
 
 	*b->buf = '\0';
 
-	if (!b->state.num) {
-		if (-1 == (b->state.num = open("/proc/meminfo", O_RDONLY))) {
+	BLOCK_INIT {
+		if (-1 == (state->fd = open("/proc/meminfo", O_RDONLY))) {
+			state->fd = 0;
 			block_strerrorf("failed to open %s", "/proc/meminfo");
 			return;
 		}
@@ -32,7 +35,7 @@ BLOCK(memory)
 
 	char buf[1024];
 
-	if (-1 == pread(b->state.num, buf, sizeof buf - 1, 0))
+	if (-1 == pread(state->fd, buf, sizeof buf, 0))
 		return;
 
 	size_t i;
@@ -46,13 +49,23 @@ BLOCK(memory)
 		}
 	}
 
-	char szused[5], sztotal[5], szpercent[6];
-	fmt_space(sztotal, total_kib * 1024UL), sztotal[4] = '\0';
-	fmt_space(szused, (total_kib - avail_kib) * 1024UL), szused[4] = '\0';
-	fmt_percent(szpercent, avail_kib, total_kib), szpercent[5] = '\0';
+	FORMAT_BEGIN {
+	case 'u':
+		p += fmt_space(p, (total_kib - avail_kib) * 1024UL);
+		continue;
 
-	sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT,
-			szused, sztotal, szpercent);
+	case 'a':
+		p += fmt_space(p, avail_kib * 1024UL);
+		continue;
+
+	case 't':
+		p += fmt_space(p, total_kib * 1024UL);
+		continue;
+
+	case 'p':
+		p += fmt_percent(p, avail_kib, total_kib);
+		continue;
+	} FORMAT_END;
 
 	unsigned const percent = 100 - (unsigned)((100UL * avail_kib) / total_kib);
 	b->timeout = (110 - percent) / 10;

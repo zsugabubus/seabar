@@ -10,9 +10,44 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdint.h>
 
-#define BLOCK(name) \
+#define DEFINE_BLOCK(name) \
 	static void block_##name(Block *const b)
+
+/* initialize internal state of block */
+#define BLOCK_INIT /* { ... } */ \
+	if (sizeof *state <= sizeof b->state ? (state = (void *)&b->state, !b->state) : !(state = b->state)) \
+		if (sizeof b->state < sizeof *state && !(state = b->state = malloc(sizeof *state))) \
+			return; \
+		else for (bool once_ = true; once_; once_ = false)
+
+#define BLOCK_UNINIT do { \
+	if (sizeof b->state < sizeof *state) \
+		free(b->state); \
+} while (0)
+
+#define DEFINE_BLOCK_STATE(type) \
+	type *state = (sizeof(type) <= sizeof(b->state) ? &b->state : b->state)
+
+#define FORMAT_BEGIN \
+{ \
+	char *p = b->buf; \
+	size_t size; \
+	for (char *format = b->format; *format && '\t' != *format; ++format) { \
+		if ('%' == *format) { \
+			switch (*++format)
+			/* { ... } */
+#define FORMAT_END \
+			p = b->buf; \
+			if (!(format = strchr(b->format, '\t'))) \
+				break; \
+		} else { \
+			*p++ = *format; \
+		} \
+	} \
+	*p = '\0'; \
+}
 
 #define BLOCK_POLLFD (&fds[b - blocks])
 
@@ -22,41 +57,38 @@
 #define TS_SEC(sec) (struct timespec){ .tv_sec = (sec), .tv_nsec = 0 }
 #define TS_ZERO TS_SEC(0)
 
-#define block_errorf(msg, ...) fprintf(stderr, "[%s] " msg "\n", __FUNCTION__, __VA_ARGS__)
-#define block_str_errorf(msg, ...) fprintf(stderr, "[%s \"%s\"] " msg "\n", __FUNCTION__, b->arg.str, __VA_ARGS__)
-#define block_num_errorf(msg, ...) fprintf(stderr, "[%s %d] " msg "\n", __FUNCTION__, b->arg.num)
-
+#define block_errorf(msg, ...) fprintf(stderr, "[%s \"%s\"] " msg "\n", __FUNCTION__, b->arg, __VA_ARGS__)
 #define block_strerror(msg) block_errorf(msg ": %s", strerror(errno))
-#define block_str_strerror(msg) block_str_errorf(msg ": %s", strerror(errno))
-
 #define block_strerrorf(msg, ...) block_errorf(msg ": %s", __VA_ARGS__, strerror(errno))
-#define block_str_strerrorf(msg, ...) block_str_errorf(msg ": %s", __VA_ARGS__, strerror(errno))
-
-static pthread_rwlock_t buf_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 typedef struct block Block;
 struct block {
 	unsigned const group;
-	char *const format;
 	void(*const poll)(Block *);
-	union {
-		void *ptr;
-		char *str;
-		int num;
-	} arg, state;
+	char *arg;
+	char *const format;
+	void *state;
 	unsigned timeout;
 	char buf[128];
 };
 
-static size_t num_blocks;
-static Block *blocks;
-static struct pollfd *fds;
-/* static struct pollfd fds[]; */
+static pthread_rwlock_t buf_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+static Block blocks[];
+static struct pollfd fds[];
 
 static struct timespec elapsed;
 
+#define ANSI_BOLD(text) "\e[1m" text "\e[21m"
+#define ANSI_RGB(r, g, b, text) "\e[38;2;" #r ";" #g ";" #b "m" text "\e[m"
+
 #include "config.blocks.h"
 #include "config.h"
+
+#undef ANSI_BOLD
+#undef ANSI_RGB
+
+static struct pollfd fds[ARRAY_SIZE(blocks)];
 
 int
 ts_cmp(struct timespec const *const __restrict__ lhs, struct timespec const *const __restrict__ rhs)
@@ -114,26 +146,26 @@ main(int argc, char *argv[])
 
 	struct timespec timeout = TS_ZERO;
 
-	init();
-
-	if (!fds)
-		fds = malloc(num_blocks * sizeof *fds);
-	for (size_t i = 0; i < num_blocks; ++i)
+	for (size_t i = 0; i < ARRAY_SIZE(blocks); ++i)
 		fds[i].fd = -1;
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGPIPE);
 
-	fputs("\e[s", stdout);
+	bool const is_tty = isatty(STDOUT_FILENO);
+
+	if (is_tty)
+		fputs("\e[s", stdout);
 
 	for (;;) {
 		struct timespec start;
 
-		fputs("\e[u", stdout);
+		if (is_tty)
+			fputs("\e[u", stdout);
 
 		pthread_rwlock_wrlock(&buf_lock);
 		unsigned group = 0;
-		for (size_t i = 0; i < num_blocks; ++i) {
+		for (size_t i = 0; i < ARRAY_SIZE(blocks); ++i) {
 			Block *const b = &blocks[i];
 
 			if (b->buf[0]) {
@@ -147,7 +179,7 @@ main(int argc, char *argv[])
 		}
 		pthread_rwlock_unlock(&buf_lock);
 
-		fputs("\e[K", stdout);
+		fputs(is_tty ? "\e[K" : "\n", stdout);
 		fflush(stdout);
 
 		clock_gettime(
@@ -159,7 +191,7 @@ main(int argc, char *argv[])
 			, &start);
 
 		/* fprintf(stderr, "\n\rtimeout %ld s %09ld ns", timeout.tv_sec, timeout.tv_nsec); */
-		int res = ppoll(fds, num_blocks, &timeout, &mask);
+		int res = ppoll(fds, ARRAY_SIZE(blocks), &timeout, &mask);
 
 		if (0 == res) {
 			elapsed = timeout;
@@ -181,16 +213,16 @@ main(int argc, char *argv[])
 		}
 		/* fprintf(stderr, "\r\nelapsed %ld s %09lld ns\n", elapsed.tv_sec, elapsed.tv_nsec); */
 
-		for (size_t i = 0; i < num_blocks; ++i) {
+		for (size_t i = 0; i < ARRAY_SIZE(blocks); ++i) {
 			Block *const b = &blocks[i];
 
 			if (fds[i].revents || b->timeout <= elapsed.tv_sec) {
 				/* fprintf(stderr, "updating block #%d\n", i); */
 				b->timeout = UINT_MAX;
 				b->poll(b);
-
-			} else if (b->timeout > elapsed.tv_sec)
+			} else if (b->timeout > elapsed.tv_sec) {
 				b->timeout -= elapsed.tv_sec;
+			}
 
 			if (0 == timeout.tv_sec || b->timeout < timeout.tv_sec)
 				timeout = TS_SEC(b->timeout);

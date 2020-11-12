@@ -10,12 +10,10 @@
 
 #define SND_CTL_SUBSCRIBE 1
 
-#define block_alsa_strerror(msg) do { block_str_errorf(msg ": %s", snd_strerror(err)); return; } while (0)
+#define block_alsa_strerror(msg) block_errorf(msg ": %s", snd_strerror(err))
 
-BLOCK(alsa)
+DEFINE_BLOCK(alsa)
 {
-	static char DEFAULT_FORMAT[] = "%ls %.2fdB";
-
 	struct {
 		snd_ctl_t *ctl;
 		char const *card;
@@ -23,18 +21,15 @@ BLOCK(alsa)
 	} *state;
 
 	snd_ctl_event_t *event;
-	snd_mixer_t *mixer;
 	snd_mixer_elem_t *elem;
+	snd_mixer_t *mixer;
 	int err;
 
 	bool changed = false;
 
-	if (!(state = b->state.ptr)) {
+	BLOCK_INIT {
 		int const mixer_index = 0;
-		char const *mixer_name = b->arg.str;
-
-		if (!(state = b->state.ptr = malloc(sizeof *state)))
-			return;
+		char const *mixer_name = b->arg;
 
 		state->card = "default";
 
@@ -55,6 +50,7 @@ BLOCK(alsa)
 		snd_ctl_poll_descriptors(state->ctl, pfd, 1);
 
 		changed = true;
+
 	}
 
 	snd_ctl_event_alloca(&event);
@@ -78,11 +74,7 @@ BLOCK(alsa)
 	if (!changed)
 		return;
 
-	long vol_100db;
-	long minvol_100db, maxvol_100db;
-	int unmuted;
-
-	if ((err = snd_mixer_open(&mixer, 0 /* Unused. */)) < 0)
+	if ((err = snd_mixer_open(&mixer, 0)) < 0)
 		block_alsa_strerror("failed to open mixer");
 
 	if ((err = snd_mixer_attach(mixer, state->card)) < 0)
@@ -97,25 +89,46 @@ BLOCK(alsa)
 	if (!(elem = snd_mixer_find_selem(mixer, state->sid)))
 		block_alsa_strerror("snd_mixer_find_selem()");
 
-	if ((err = snd_mixer_selem_get_playback_dB_range(elem, &minvol_100db, &maxvol_100db)) < 0)
-		block_alsa_strerror("snd_mixer_selem_get_playback_dB_range()");
+	FORMAT_BEGIN {
+	case 'i':
+	{
+		int unmuted;
 
-	if ((err = snd_mixer_selem_get_playback_dB(elem, SND_MIXER_SCHN_MONO, &vol_100db)) < 0)
-		block_alsa_strerror("snd_mixer_selem_get_playback_dB()");
+		if (snd_mixer_selem_has_playback_switch(elem)) {
+			if ((err = snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &unmuted)) < 0) {
+				block_alsa_strerror("failed to query mute state");
+				break;
+			}
+		} else {
+			unmuted = 1;
+		}
 
-	if (snd_mixer_selem_has_playback_switch(elem)) {
-		if ((err = snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &unmuted)) < 0)
-			block_alsa_strerror("snd_mixer_selem_get_playback_switch()");
-	} else {
-		unmuted = 1;
+		char *const icon = unmuted ? "\xef\xa9\xbd" : "\xef\xaa\x80";
+		size = strlen(icon);
+		memcpy(p, icon, size), p += size;
 	}
+		continue;
+
+	case 'd':
+	{
+		long db, min_db, max_db;
+		if ((err = snd_mixer_selem_get_playback_dB_range(elem, &min_db, &max_db)) < 0 ||
+		    (err = snd_mixer_selem_get_playback_dB(elem, SND_MIXER_SCHN_MONO, &db)) < 0)
+		{
+			block_alsa_strerror("failed to get volume");
+			break;
+		}
+
+		if (min_db < db) {
+			p += sprintf(p, "%ddB", db / 100);
+		} else {
+			char *const minus_inf = "-\xe2\x88\x9e" "dB";
+			size = strlen(minus_inf);
+			memcpy(p, minus_inf, size), p += size;
+		}
+	}
+		continue;
+	} FORMAT_END;
 
 	snd_mixer_close(mixer);
-
-	wchar_t const *symbol = unmuted ? L"墳" : L"婢";
-	sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT,
-			symbol,
-			vol_100db != minvol_100db
-				? vol_100db / 100.0
-				: -INFINITY);
 }

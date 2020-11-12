@@ -25,10 +25,8 @@
 
 #include "fourmat/fourmat.h"
 
-BLOCK(net)
+DEFINE_BLOCK(net)
 {
-	static char const DEFAULT_FORMAT[] = "%ls%s%s%s  %s @ %s  %s @ %s";
-
 	struct {
 		unsigned long long last_rx_bytes, last_tx_bytes;
 		unsigned if_index;
@@ -39,10 +37,10 @@ BLOCK(net)
 		char szip6_addr[INET6_ADDRSTRLEN + sizeof("/128")];
 		char szmac_addr[sizeof("00:00:00:00:00:00")];
 		char szlink_speed[4];
-		wchar_t const *symbol;
+		char const *icon;
 	} *state;
 
-	char *if_name = b->arg.str;
+	char *if_name = b->arg;
 
 	static struct iovec iov;
 	static struct sockaddr_nl nlsa = {
@@ -75,10 +73,7 @@ BLOCK(net)
 
 	int nlfd;
 
-	if (!(state = b->state.ptr)) {
-		if (!(state = b->state.ptr = malloc(sizeof *state)))
-			abort();
-
+	BLOCK_INIT {
 		state->last_rx_bytes = 0;
 		state->last_tx_bytes = 0;
 		state->if_state = IF_OPER_UNKNOWN;
@@ -87,10 +82,10 @@ BLOCK(net)
 		*state->szip6_addr = '\0';
 		*state->szmac_addr = '\0';
 		*state->szlink_speed = '\0';
-		state->symbol = L"\0";
+		state->icon = "\0";
 
 		if (!(state->if_index = if_nametoindex(if_name))) {
-			block_str_strerror("failed to find interface");
+			block_strerror("failed to find interface");
 			return;
 		}
 
@@ -175,8 +170,8 @@ BLOCK(net)
 				ifa = NULL;
 
 				switch (ifi->ifi_type) {
-				case ARPHRD_ETHER: state->symbol = L" "; break;
-				default:           state->symbol = L"ﯱ "; break;
+				case ARPHRD_ETHER: state->icon = "\xef\x9b\xbf "; break;
+				default:           state->icon = "\xef\xaf\xb1 "; break;
 				}
 
 				*state->essid = '\0';
@@ -188,7 +183,7 @@ BLOCK(net)
 				if (!ioctl(sfd, SIOCGIWNAME, &iwr)) {
 					struct iw_statistics iwstat;
 
-					state->symbol = L" ";
+					state->icon = "\xef\x87\xab ";
 
 					iwr.u.data.pointer = &iwstat;
 					iwr.u.data.length = sizeof(iwstat);
@@ -272,40 +267,103 @@ BLOCK(net)
 		}
 	}
 
+	uint64_t rx_rate = 0, tx_rate = 0;
+
 	switch (state->if_state) {
 	case IF_OPER_UNKNOWN: /* for loopback */
 	case IF_OPER_UP:
 	case IF_OPER_DORMANT:
 	{
 		uint64_t const elapsed_ns = elapsed.tv_sec * NSEC_PER_SEC + elapsed.tv_nsec;
-		uint64_t rx_rate, tx_rate;
 		if (0 < elapsed_ns) {
 			rx_rate = (rx_bytes - state->last_rx_bytes) * NSEC_PER_SEC / elapsed_ns;
 			tx_rate = (tx_bytes - state->last_tx_bytes) * NSEC_PER_SEC / elapsed_ns;
-		} else {
-			rx_rate = 0;
-			tx_rate = 0;
 		}
-
-		char szrx_rate[5], sztx_rate[5];
-		char szrx[5], sztx[5];
-
-		szrx[fmt_speed(szrx, rx_bytes)] = '\0';
-		sztx[fmt_speed(sztx, tx_bytes)] = '\0';
-		szrx_rate[fmt_speed(szrx_rate, rx_rate)] = '\0';
-		sztx_rate[fmt_speed(sztx_rate, tx_rate)] = '\0';
-
-		sprintf(b->buf, b->format ? b->format : DEFAULT_FORMAT,
-			state->symbol,
-			state->essid,
-			(*state->essid ? " " : ""),
-			(*state->szip_addr ? state->szip_addr : *state->szip6_addr > 0 ? state->szip6_addr : state->szmac_addr),
-			szrx, szrx_rate,
-			sztx, sztx_rate);
 
 		state->last_rx_bytes = rx_bytes;
 		state->last_tx_bytes = tx_bytes;
 	}
 		break;
 	}
+
+	FORMAT_BEGIN {
+	case 'U':
+		if (IF_OPER_UP != state->if_state)
+			break;
+		continue;
+
+	case 'n':
+		size = strlen(b->arg);
+		memcpy(p, b->arg, size), p += size;
+		continue;
+
+	case 'i':
+		size = strlen(state->icon);
+		memcpy(p, state->icon, size), p += size;
+		continue;
+
+	case '4':
+	case '6':
+	case 'm':
+	{
+		char const *address;
+
+		switch (*format) {
+		case '4':
+			address = state->szip_addr;
+			break;
+
+		case '6':
+			address = state->szip6_addr;
+			break;
+
+		case 'm':
+			address = state->szmac_addr;
+			break;
+		}
+		if (!*address)
+			break;
+
+		size = strlen(address);
+		memcpy(p, address, size), p += size;
+	}
+		break;
+
+	case 'a':
+	{
+		char const *const address = (*state->szip_addr ? state->szip_addr : *state->szip6_addr ? state->szip6_addr : state->szmac_addr);
+		if (!*address)
+			break;
+
+		size = strlen(address);
+		memcpy(p, address, size), p += size;
+	}
+		continue;
+
+	case 'e':
+		if (!*state->essid)
+			break;
+
+		size = strlen(state->essid);
+		memcpy(p, state->essid, size), p += size;
+		continue;
+
+	case 'R':
+		p += fmt_space(p, rx_bytes);
+		continue;
+
+	case 'r':
+		p += fmt_speed(p, rx_rate);
+		continue;
+
+	case 'T':
+		p += fmt_space(p, tx_bytes);
+		continue;
+
+	case 't':
+		p += fmt_speed(p, tx_rate);
+		continue;
+
+	} FORMAT_END;
+
 }

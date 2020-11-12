@@ -1,5 +1,5 @@
 CFLAGS += -std=c11 -g -O0
-BLOCK_CFLAGS := $(shell sed -n '/block_[a-z]*/{s|.*block_\([a-z]*\).*|blocks/\1.h|p}' <config.h | sort | uniq | xargs -I{} sed -n '/^\/\* *CFLAGS *+=/{s|.*+= *\(.*\) *\*/$$|\1|p}' {})
+BLOCK_CFLAGS := $(shell sed -n '/block_[a-z_]*/{s|.*block_\([a-z_]*\).*|blocks/\1.h|p}' <config.h | sort | uniq | xargs -I{} sed -n '/^\/\* *CFLAGS *+=/{s|.*+= *\(.*\) *\*/$$|\1|p}' {})
 CFLAGS += $(BLOCK_CFLAGS)
 LDFLAGS +=
 

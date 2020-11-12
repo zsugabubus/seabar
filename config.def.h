@@ -1,17 +1,12 @@
 static char const BLOCK_SEP[] = " ";
 static char const GROUP_SEP[] = " | ";
 
-static Block MY_BAR[] = {
-	{ 1, NULL, block_alsa },
-	{ 2, NULL, block_cpu },
-	{ 2, NULL, block_memory },
-	{ 3, NULL, block_fsstat, { .str = "/" } },
-	{ 4, NULL, block_net, { .str = "lo" } },
-	{ 5, NULL, block_datetime }
+static Block blocks[] = {
+	{ 8, block_read, "/proc/sys/kernel/random/entropy_avail", "E=%d" },
+	{ 1, block_alsa, "Master", "VOL %d" },
+	{ 2, block_cpu, "", "CPU %p" },
+	{ 2, block_memory, NULL, "MEM %u/%t (%p)" },
+	{ 3, block_fsstat, "/home", "%n: %a (%F)" },
+	{ 4, block_net, "lo", "%n: DN %R @ %r UP %T @ %t" },
+	{ 5, block_datetime, NULL, "%c" }
 };
-static Block *blocks = MY_BAR;
-static size_t num_blocks = ARRAY_SIZE(MY_BAR);
-
-static void
-init(void)
-{ }
