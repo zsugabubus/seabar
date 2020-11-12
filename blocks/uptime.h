@@ -1,3 +1,8 @@
+#include <string.h>
+#include <time.h>
+
+#include "fourmat/fourmat.h"
+
 DEFINE_BLOCK(uptime)
 {
 	struct timespec uptime;
@@ -17,9 +22,8 @@ DEFINE_BLOCK(uptime)
 
 	FORMAT_BEGIN {
 	case 't':
-		memcpy(p, szuptime, 5), p += 5;
+		memcpy(p, szuptime, sizeof szuptime), p += sizeof szuptime;
 		continue;
-
 	} FORMAT_END;
 
 	switch (szuptime[4]) {
