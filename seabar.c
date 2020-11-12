@@ -25,6 +25,7 @@
 #define BLOCK_UNINIT do { \
 	if (sizeof b->state < sizeof *state) \
 		free(b->state); \
+	b->state = NULL; \
 } while (0)
 
 #define DEFINE_BLOCK_STATE(type) \
@@ -40,7 +41,7 @@
 			/* { ... } */
 #define FORMAT_END \
 			p = b->buf; \
-			if (!(format = strchr(b->format, '\t'))) \
+			if (!(format = strchr(format, '\t'))) \
 				break; \
 		} else { \
 			*p++ = *format; \
@@ -59,7 +60,6 @@
 
 #define block_errorf(msg, ...) fprintf(stderr, "[%s \"%s\"] " msg "\n", __FUNCTION__, b->arg, __VA_ARGS__)
 #define block_strerror(msg) block_errorf(msg ": %s", strerror(errno))
-#define block_strerrorf(msg, ...) block_errorf(msg ": %s", __VA_ARGS__, strerror(errno))
 
 typedef struct block Block;
 struct block {
@@ -74,21 +74,22 @@ struct block {
 
 static pthread_rwlock_t buf_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-static Block blocks[];
-static struct pollfd fds[];
+static Block *blocks;
+static size_t num_blocks;
+static struct pollfd *fds;
 
 static struct timespec elapsed;
 
 #define ANSI_BOLD(text) "\e[1m" text "\e[21m"
 #define ANSI_RGB(r, g, b, text) "\e[38;2;" #r ";" #g ";" #b "m" text "\e[m"
 
+static void init(void);
+
 #include "config.blocks.h"
 #include "config.h"
 
 #undef ANSI_BOLD
 #undef ANSI_RGB
-
-static struct pollfd fds[ARRAY_SIZE(blocks)];
 
 int
 ts_cmp(struct timespec const *const __restrict__ lhs, struct timespec const *const __restrict__ rhs)
@@ -146,11 +147,14 @@ main(int argc, char *argv[])
 
 	struct timespec timeout = TS_ZERO;
 
-	for (size_t i = 0; i < ARRAY_SIZE(blocks); ++i)
+	fds = alloca(sizeof *fds * num_blocks);
+	for (size_t i = 0; i < num_blocks; ++i)
 		fds[i].fd = -1;
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGPIPE);
+
+	init();
 
 	bool const is_tty = isatty(STDOUT_FILENO);
 
@@ -165,7 +169,7 @@ main(int argc, char *argv[])
 
 		pthread_rwlock_wrlock(&buf_lock);
 		unsigned group = 0;
-		for (size_t i = 0; i < ARRAY_SIZE(blocks); ++i) {
+		for (size_t i = 0; i < num_blocks; ++i) {
 			Block *const b = &blocks[i];
 
 			if (b->buf[0]) {
@@ -191,7 +195,7 @@ main(int argc, char *argv[])
 			, &start);
 
 		/* fprintf(stderr, "\n\rtimeout %ld s %09ld ns", timeout.tv_sec, timeout.tv_nsec); */
-		int res = ppoll(fds, ARRAY_SIZE(blocks), &timeout, &mask);
+		int res = ppoll(fds, num_blocks, &timeout, &mask);
 
 		if (0 == res) {
 			elapsed = timeout;
@@ -213,7 +217,7 @@ main(int argc, char *argv[])
 		}
 		/* fprintf(stderr, "\r\nelapsed %ld s %09lld ns\n", elapsed.tv_sec, elapsed.tv_nsec); */
 
-		for (size_t i = 0; i < ARRAY_SIZE(blocks); ++i) {
+		for (size_t i = 0; i < num_blocks; ++i) {
 			Block *const b = &blocks[i];
 
 			if (fds[i].revents || b->timeout <= elapsed.tv_sec) {

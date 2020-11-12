@@ -4,7 +4,7 @@ DEFINE_BLOCK(hostname)
 {
 	char host[HOST_NAME_MAX];
 
-	if (-1 == gethostname(host, sizeof host)) {
+	if (gethostname(host, sizeof host) < 0) {
 		*b->buf = '\0';
 		block_strerror("failed to get name of host");
 	}

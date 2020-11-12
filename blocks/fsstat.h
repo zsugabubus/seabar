@@ -25,7 +25,7 @@ block_fsstat_worker(void *arg)
 	FORMAT_BEGIN {
 	case 'i':
 	{
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		char const *icon;
@@ -48,42 +48,42 @@ block_fsstat_worker(void *arg)
 		continue;
 
 	case 'a':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		p += fmt_space(p, st.f_bsize * st.f_bavail);
 		continue;
 
 	case 'f':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		p += fmt_space(p, st.f_bsize * st.f_bfree);
 		continue;
 
 	case 't':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		p += fmt_space(p, st.f_frsize * st.f_blocks);
 		continue;
 
 	case 'p':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		p += fmt_percent(p, st.f_frsize * st.f_blocks - st.f_bsize * st.f_bavail, st.f_frsize * st.f_blocks);
 		continue;
 
 	case 'P':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		p += fmt_percent(p, st.f_bsize * st.f_bavail, st.f_frsize * st.f_blocks);
 		continue;
 
 	case 'F':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		*p++ = st.f_flag & ST_RDONLY ? '-' : 'w';
@@ -92,14 +92,14 @@ block_fsstat_worker(void *arg)
 		continue;
 
 	case 'c':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		p += sprintf(p, "%ld", st.f_files);
 		continue;
 
 	case 'r':
-		if (-1 == res)
+		if (res < 0)
 			break;
 
 		if (st.f_flag & ST_RDONLY)

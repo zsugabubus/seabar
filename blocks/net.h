@@ -62,7 +62,7 @@ DEFINE_BLOCK(net)
 
 		nlsa.nl_pid = getpid();
 
-		if (-1 == sfd)
+		if (sfd < 0)
 			sfd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_IP);
 	}
 
@@ -90,12 +90,12 @@ DEFINE_BLOCK(net)
 		}
 
 		struct pollfd *pfd = BLOCK_POLLFD;
-		if (-1 == (nlfd = socket(AF_NETLINK, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC, NETLINK_ROUTE)))
+		if ((nlfd = socket(AF_NETLINK, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC, NETLINK_ROUTE)) < 0)
 			return;
 
 		setsockopt(nlfd, SOL_NETLINK, NETLINK_EXT_ACK, (int[]){ true }, sizeof(int));
 
-		if (-1 == bind(nlfd, (struct sockaddr *)&nlsa, sizeof nlsa))
+		if (bind(nlfd, (struct sockaddr *)&nlsa, sizeof nlsa) < 0)
 			return;
 
 		pfd->fd = nlfd;
@@ -115,7 +115,7 @@ DEFINE_BLOCK(net)
 		ifa->ifa_index = state->if_index;
 
 		setsockopt(nlfd, SOL_NETLINK, NETLINK_GET_STRICT_CHK, (int[]){ true }, sizeof(int));
-		if (-1 == sendto(nlfd, nlh, nlh->nlmsg_len, 0, NULL, 0))
+		if (sendto(nlfd, nlh, nlh->nlmsg_len, 0, NULL, 0) < 0)
 			perror("sendto()");
 		setsockopt(nlfd, SOL_NETLINK, NETLINK_GET_STRICT_CHK, (int[]){ false }, sizeof(int));
 	} else {
@@ -135,7 +135,7 @@ DEFINE_BLOCK(net)
 	ifi->ifi_flags = 0;
 	ifi->ifi_change = 0xFFffFFff; /* 0 */
 
-	if (-1 == sendto(nlfd, nlh, nlh->nlmsg_len, 0, NULL, 0))
+	if (sendto(nlfd, nlh, nlh->nlmsg_len, 0, NULL, 0) < 0)
 		perror("sendto()");
 
 	b->timeout = 4;
@@ -144,7 +144,7 @@ DEFINE_BLOCK(net)
 
 	for (;;) {
 		ssize_t len = recvmsg(nlfd, &msg, MSG_DONTWAIT);
-		if (-1 == len)
+		if (len < 0)
 			break;
 
 		for (nlh = (struct nlmsghdr *)iov.iov_base;

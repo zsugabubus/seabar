@@ -11,7 +11,7 @@ DEFINE_BLOCK(read)
 	*b->buf = '\0';
 
 	BLOCK_INIT {
-		if (-1 == (state->fd = open(b->arg, O_RDONLY))) {
+		if ((state->fd = open(b->arg, O_RDONLY | O_NONBLOCK | O_CLOEXEC)) < 0) {
 			state->fd = 0;
 			if (ENOENT != errno)
 				block_strerror("failed to open for read");

@@ -26,16 +26,16 @@ DEFINE_BLOCK(memory)
 	*b->buf = '\0';
 
 	BLOCK_INIT {
-		if (-1 == (state->fd = open("/proc/meminfo", O_RDONLY))) {
+		if ((state->fd = open("/proc/meminfo", O_RDONLY)) < 0) {
 			state->fd = 0;
-			block_strerrorf("failed to open %s", "/proc/meminfo");
+			block_strerror("failed to open /proc/meminfo");
 			return;
 		}
 	}
 
 	char buf[1024];
 
-	if (-1 == pread(state->fd, buf, sizeof buf, 0))
+	if (pread(state->fd, buf, sizeof buf, 0) < 0)
 		return;
 
 	size_t i;

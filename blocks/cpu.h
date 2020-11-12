@@ -17,7 +17,7 @@ DEFINE_BLOCK(cpu)
 		state->total = 0;
 		state->idle = 0;
 
-		while (-1 == (state->fd = open("/proc/stat", O_RDONLY))) {
+		while ((state->fd = open("/proc/stat", O_RDONLY)) < 0) {
 			if (EINTR == errno)
 				continue;
 
@@ -27,7 +27,7 @@ DEFINE_BLOCK(cpu)
 		}
 	}
 
-	while (-1 == pread(state->fd, buf, sizeof buf, 0)) {
+	while (pread(state->fd, buf, sizeof buf, 0) < 0) {
 		if (EINTR == errno)
 			continue;
 
