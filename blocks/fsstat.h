@@ -23,22 +23,22 @@ block_fsstat_worker(void *arg)
 
 	pthread_rwlock_rdlock(&buf_lock);
 	FORMAT_BEGIN {
-	case 'i':
+	case 'i': /* basic fs icon */
 	{
 		if (res < 0)
 			break;
 
 		char const *icon;
 		switch (st.f_fsid) {
-		case 0:  icon = " "; break;
-		default: icon = " "; break;
+		case 0/* tmpfs */: icon = "\xef\x82\xae "; break;
+		default:           icon = "\xef\x9f\x89 "; break;
 		}
 		size_t const icon_size = strlen(icon);
 		memcpy(p, icon, icon_size), p += icon_size;
 	}
 		continue;
 
-	case 'n':
+	case 'n': /* name */
 	{
 		char const *name = strrchr(b->arg, '/');
 		name = name ? name + 1 : b->arg;
@@ -47,42 +47,42 @@ block_fsstat_worker(void *arg)
 	}
 		continue;
 
-	case 'a':
+	case 'a': /* available (free space for unprivileged users) */
 		if (res < 0)
 			break;
 
-		p += fmt_space(p, st.f_bsize * st.f_bavail);
+		p += fmt_space(p, st.f_bavail * st.f_bsize);
 		continue;
 
-	case 'f':
+	case 'f': /* free */
 		if (res < 0)
 			break;
 
-		p += fmt_space(p, st.f_bsize * st.f_bfree);
+		p += fmt_space(p, st.f_bfree * st.f_bsize);
 		continue;
 
-	case 't':
+	case 't': /* total */
 		if (res < 0)
 			break;
 
 		p += fmt_space(p, st.f_frsize * st.f_blocks);
 		continue;
 
-	case 'p':
+	case 'p': /* used percent */
 		if (res < 0)
 			break;
 
-		p += fmt_percent(p, st.f_frsize * st.f_blocks - st.f_bsize * st.f_bavail, st.f_frsize * st.f_blocks);
+		p += fmt_percent(p, st.f_frsize * st.f_blocks - st.f_bavail * st.f_bsize, st.f_frsize * st.f_blocks);
 		continue;
 
-	case 'P':
+	case 'P': /* free percent */
 		if (res < 0)
 			break;
 
-		p += fmt_percent(p, st.f_bsize * st.f_bavail, st.f_frsize * st.f_blocks);
+		p += fmt_percent(p, st.f_bavail * st.f_bsize, st.f_frsize * st.f_blocks);
 		continue;
 
-	case 'F':
+	case 'F': /* flags */
 		if (res < 0)
 			break;
 
@@ -91,19 +91,27 @@ block_fsstat_worker(void *arg)
 		*p++ = st.f_flag & ST_NOSUID ? '-' : 's';
 		continue;
 
-	case 'c':
+	case 'c': /* file count */
 		if (res < 0)
 			break;
 
 		p += sprintf(p, "%ld", st.f_files);
 		continue;
 
-	case 'r':
+	case 'r': /* '*' if read-only */
 		if (res < 0)
 			break;
 
 		if (st.f_flag & ST_RDONLY)
 			*p++ = '*';
+		continue;
+
+	case 'R': /* '[RO]' if read-only */
+		if (res < 0)
+			break;
+
+		if (st.f_flag & ST_RDONLY)
+			memcpy(p, "[RO]", 4), p += 4;
 		continue;
 	} FORMAT_END;
 	pthread_rwlock_unlock(&buf_lock);

@@ -66,9 +66,7 @@ DEFINE_BLOCK(alsa)
 		/* is changed? */
 		if (SND_CTL_EVENT_ELEM == snd_ctl_event_get_type(event) &&
 		    (SND_CTL_EVENT_MASK_VALUE & snd_ctl_event_elem_get_mask(event)))
-		{
 			changed = true;
-		}
 	}
 
 	if (!changed)
@@ -89,27 +87,37 @@ DEFINE_BLOCK(alsa)
 	if (!(elem = snd_mixer_find_selem(mixer, state->sid)))
 		block_alsa_strerror("snd_mixer_find_selem()");
 
-	FORMAT_BEGIN {
-	case 'i':
-	{
-		int unmuted;
+	int unmuted;
 
-		if (snd_mixer_selem_has_playback_switch(elem)) {
-			if ((err = snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &unmuted)) < 0) {
-				block_alsa_strerror("failed to query mute state");
-				break;
-			}
-		} else {
-			unmuted = 1;
+	if (snd_mixer_selem_has_playback_switch(elem)) {
+		if ((err = snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &unmuted)) < 0) {
+			unmuted = 0;
+			block_alsa_strerror("failed to query mute state");
 		}
+	} else {
+		unmuted = 1;
+	}
 
-		char *const icon = unmuted ? "\xef\xa9\xbd" : "\xef\xaa\x80";
+	FORMAT_BEGIN {
+	case 'U': /* if unmuted */
+		if (unmuted)
+			continue;
+		break;
+
+	case 'M': /* if muted */
+		if (!unmuted)
+			continue;
+		break;
+
+	case 'i': /* speaker icon */
+	{
+		char const *const icon = unmuted ? "\xef\xa9\xbd" : "\xef\xaa\x80";
 		size = strlen(icon);
 		memcpy(p, icon, size), p += size;
 	}
 		continue;
 
-	case 'd':
+	case 'd': /* volume in decibel */
 	{
 		long db, min_db, max_db;
 		if ((err = snd_mixer_selem_get_playback_dB_range(elem, &min_db, &max_db)) < 0 ||

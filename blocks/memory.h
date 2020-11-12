@@ -50,25 +50,28 @@ DEFINE_BLOCK(memory)
 	}
 
 	FORMAT_BEGIN {
-	case 'u':
-		p += fmt_space(p, (total_kib - avail_kib) * 1024UL);
+	case 'u': /* used */
+		p += fmt_space(p, (total_kib - avail_kib) << 10);
 		continue;
 
-	case 'a':
-		p += fmt_space(p, avail_kib * 1024UL);
+	case 'p': /* used percent */
+		p += fmt_percent(p, total_kib - avail_kib, total_kib);
 		continue;
 
-	case 't':
-		p += fmt_space(p, total_kib * 1024UL);
+	case 'a': /* available */
+		p += fmt_space(p, avail_kib << 10);
 		continue;
 
-	case 'p':
+	case 'P': /* available percent */
 		p += fmt_percent(p, avail_kib, total_kib);
+		continue;
+
+	case 't': /* total */
+		p += fmt_space(p, total_kib << 10);
 		continue;
 	} FORMAT_END;
 
-	unsigned const percent = 100 - (unsigned)((100UL * avail_kib) / total_kib);
-	b->timeout = (110 - percent) / 10;
+	b->timeout = 1 + avail_kib * 10 / total_kib;
 
 #undef ENTRY
 }

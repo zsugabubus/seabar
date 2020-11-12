@@ -59,8 +59,8 @@ DEFINE_BLOCK(spawn) {
 	}
 
 	FORMAT_BEGIN {
-	case 's':
-	case 'S':
+	case 's': /* output if not empty */
+	case 'S': /* output */
 		size = state->line_size - (state->line_size && '\n' == state->line[state->line_size - 1]);
 		if (!size && 's' == *format)
 			break;

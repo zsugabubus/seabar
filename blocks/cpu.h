@@ -21,8 +21,7 @@ DEFINE_BLOCK(cpu)
 			if (EINTR == errno)
 				continue;
 
-			fprintf(stderr, "failed to open /proc/stat: %s",
-					strerror(errno));
+			block_strerror("failed to open /proc/stat");
 			return;
 		}
 	}
@@ -31,8 +30,7 @@ DEFINE_BLOCK(cpu)
 		if (EINTR == errno)
 			continue;
 
-		fprintf(stderr, "failed read /proc/stat: %s",
-				strerror(errno));
+		block_strerror("failed to read /proc/stat");
 		return;
 	}
 
@@ -42,11 +40,11 @@ DEFINE_BLOCK(cpu)
 	p += sizeof("cpu");
 	p = strchr(p, ' ') + 1;
 
-	unsigned long long new_total = 0, delta_total;
-	unsigned long long new_idle = 0, delta_idle;
+	uint64_t new_total = 0, delta_total;
+	uint64_t new_idle = 0, delta_idle;
 
 	for (uint8_t i = 0; '\n' != *p; ++i) {
-		unsigned long long const val = strtoull(p, &p, 10);
+		uint64_t const val = strtoull(p, &p, 10);
 		new_total += val;
 		switch (i) {
 		case 3/* idle */:
@@ -58,8 +56,12 @@ DEFINE_BLOCK(cpu)
 	delta_idle = new_idle - state->idle;
 	if (0 < (delta_total = new_total - state->total)) {
 		FORMAT_BEGIN {
-		case 'p':
-			p += sprintf(p, "%2d%%", 100 - ((100ULL * delta_idle) / delta_total));
+		case 'p': /* busy percent */
+			p += sprintf(p, "%2d%%", 100 - (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
+			continue;
+
+		case 'P': /* idle percent */
+			p += sprintf(p, "%3d%%", (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
 			continue;
 		} FORMAT_END;
 	}

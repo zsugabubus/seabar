@@ -21,7 +21,7 @@ DEFINE_BLOCK(uptime)
 	fmt_time(szuptime, uptime.tv_sec);
 
 	FORMAT_BEGIN {
-	case 't':
+	case 't': /* uptime */
 		memcpy(p, szuptime, sizeof szuptime), p += sizeof szuptime;
 		continue;
 	} FORMAT_END;

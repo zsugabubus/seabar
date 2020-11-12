@@ -1,8 +1,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <getopt.h>
-#include <net/if.h>
+#include <net/if.h> /* must be here because of improper include guards */
 #include <linux/ethtool.h>
 #include <linux/limits.h>
 #include <linux/netlink.h>
@@ -21,7 +20,6 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include <wchar.h>
 
 #include "fourmat/fourmat.h"
 
@@ -287,24 +285,29 @@ DEFINE_BLOCK(net)
 	}
 
 	FORMAT_BEGIN {
-	case 'U':
-		if (IF_OPER_UP != state->if_state)
-			break;
-		continue;
+	case 'U': /* if up */
+		if (IF_OPER_UP == state->if_state)
+			continue;
+		break;
 
-	case 'n':
+	case 'D': /* if down */
+		if (IF_OPER_DOWN == state->if_state)
+			continue;
+		break;
+
+	case 'n': /* name */
 		size = strlen(b->arg);
 		memcpy(p, b->arg, size), p += size;
 		continue;
 
-	case 'i':
+	case 'i': /* interface icon */
 		size = strlen(state->icon);
 		memcpy(p, state->icon, size), p += size;
 		continue;
 
-	case '4':
-	case '6':
-	case 'm':
+	case '4': /* IPv4 address */
+	case '6': /* IPv6 address */
+	case 'm': /* MAC address */
 	{
 		char const *address;
 
@@ -329,7 +332,7 @@ DEFINE_BLOCK(net)
 	}
 		break;
 
-	case 'a':
+	case 'a': /* address (IPv4 or IPv6 or MAC) */
 	{
 		char const *const address = (*state->szip_addr ? state->szip_addr : *state->szip6_addr ? state->szip6_addr : state->szmac_addr);
 		if (!*address)
@@ -340,7 +343,7 @@ DEFINE_BLOCK(net)
 	}
 		continue;
 
-	case 'e':
+	case 'e': /* ESSID */
 		if (!*state->essid)
 			break;
 
@@ -348,22 +351,21 @@ DEFINE_BLOCK(net)
 		memcpy(p, state->essid, size), p += size;
 		continue;
 
-	case 'R':
+	case 'R': /* receive total */
 		p += fmt_space(p, rx_bytes);
 		continue;
 
-	case 'r':
+	case 'r': /* receive rate */
 		p += fmt_speed(p, rx_rate);
 		continue;
 
-	case 'T':
+	case 'T': /* transfer total */
 		p += fmt_space(p, tx_bytes);
 		continue;
 
-	case 't':
+	case 't': /* transfer rate */
 		p += fmt_speed(p, tx_rate);
 		continue;
-
 	} FORMAT_END;
 
 }

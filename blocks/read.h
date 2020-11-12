@@ -19,7 +19,7 @@ DEFINE_BLOCK(read)
 		}
 	}
 
-	ssize_t len = pread(state->fd, buf, sizeof buf - 1, 0);
+	ssize_t len = pread(state->fd, buf, sizeof buf, 0);
 	if (len < 0) {
 		block_strerror("failed to read");
 		close(state->fd), state->fd = 0;
@@ -33,15 +33,15 @@ DEFINE_BLOCK(read)
 	}
 
 	FORMAT_BEGIN {
-	case 'b':
+	case 'b': /* IEC number */
 		p += fmt_space(p, strtoull(buf, NULL, 10));
 		continue;
 
-	case 'd':
+	case 'd': /* SI number */
 		p += fmt_speed(p, strtoull(buf, NULL, 10));
 		continue;
 
-	case 's':
+	case 's': /* string */
 		memcpy(p, buf, len), p += len;
 		continue;
 	} FORMAT_END;
