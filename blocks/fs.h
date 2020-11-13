@@ -8,18 +8,22 @@
 
 #include "fourmat/fourmat.h"
 
-struct block_fsstat_state {
+struct block_fs_state {
 	int fd;
 };
 
 static void *
-block_fsstat_worker(void *arg)
+block_fs_worker(void *arg)
 {
 	Block *const b = arg;
-	DEFINE_BLOCK_STATE(struct block_fsstat_state);
+	DEFINE_BLOCK_STATE(struct block_fs_state);
 
 	struct statvfs st;
 	int const res = statvfs(b->arg, &st);
+
+	uint64_t const total_size = (uint64_t)st.f_blocks * st.f_frsize;
+	uint64_t const avail_size = (uint64_t)st.f_bavail * st.f_bsize;
+	uint64_t const free_size  = (uint64_t)st.f_bfree * st.f_bsize;
 
 	pthread_rwlock_rdlock(&buf_lock);
 	FORMAT_BEGIN {
@@ -51,35 +55,44 @@ block_fsstat_worker(void *arg)
 		if (res < 0)
 			break;
 
-		p += fmt_space(p, st.f_bavail * st.f_bsize);
+		p += fmt_space(p, avail_size);
+		continue;
+
+	case 'P': /* available percent */
+		if (res < 0)
+			break;
+
+		p += fmt_percent(p, avail_size, total_size);
 		continue;
 
 	case 'f': /* free */
+	{
 		if (res < 0)
 			break;
 
-		p += fmt_space(p, st.f_bfree * st.f_bsize);
+		p += fmt_space(p, free_size);
+	}
 		continue;
 
-	case 't': /* total */
+	case 'u': /* used */
 		if (res < 0)
 			break;
 
-		p += fmt_space(p, st.f_frsize * st.f_blocks);
+		p += fmt_space(p, total_size - free_size);
 		continue;
 
 	case 'p': /* used percent */
 		if (res < 0)
 			break;
 
-		p += fmt_percent(p, st.f_frsize * st.f_blocks - st.f_bavail * st.f_bsize, st.f_frsize * st.f_blocks);
+		p += fmt_percent(p, total_size - avail_size, total_size);
 		continue;
 
-	case 'P': /* free percent */
+	case 't': /* total */
 		if (res < 0)
 			break;
 
-		p += fmt_percent(p, st.f_bavail * st.f_bsize, st.f_frsize * st.f_blocks);
+		p += fmt_space(p, total_size);
 		continue;
 
 	case 'F': /* flags */
@@ -123,13 +136,13 @@ out:
 	return (void *)EXIT_SUCCESS;
 }
 
-DEFINE_BLOCK(fsstat)
+DEFINE_BLOCK(fs)
 {
 	pthread_t thread;
 
 	struct pollfd *pfd = BLOCK_POLLFD;
 	if (pfd->fd < 0) {
-		DEFINE_BLOCK_STATE(struct block_fsstat_state);
+		DEFINE_BLOCK_STATE(struct block_fs_state);
 		int pair[2];
 
 		pipe(pair);
@@ -139,7 +152,7 @@ DEFINE_BLOCK(fsstat)
 
 		state->fd = pair[1];
 
-		pthread_create(&thread, NULL, &block_fsstat_worker, b);
+		pthread_create(&thread, NULL, &block_fs_worker, b);
 	} else {
 		close(pfd->fd);
 		pfd->fd = -1;
