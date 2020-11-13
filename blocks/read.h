@@ -33,11 +33,15 @@ DEFINE_BLOCK(read)
 	}
 
 	FORMAT_BEGIN {
-	case 'b': /* IEC number */
+	case 'n': /* number */
+		p += fmt_number(p, strtoull(buf, NULL, 10));
+		continue;
+
+	case 'i': /* IEC number */
 		p += fmt_space(p, strtoull(buf, NULL, 10));
 		continue;
 
-	case 'd': /* SI number */
+	case 's': /* SI number */
 		p += fmt_speed(p, strtoull(buf, NULL, 10));
 		continue;
 
