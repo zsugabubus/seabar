@@ -1,6 +1,6 @@
 #include <string.h>
 
-BLOCK(text)
+DEFINE_BLOCK(text)
 {
 	strcpy(b->buf, b->format);
 }

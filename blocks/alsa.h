@@ -1,9 +1,8 @@
 /* CFLAGS+=$(pkg-config --libs --cflags alsa) */
 #include <alsa/asoundlib.h>
 #include <fcntl.h>
-#include <locale.h>
 #include <math.h>
-#include <stdio.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

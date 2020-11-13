@@ -1,3 +1,9 @@
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "fourmat/fourmat.h"
 
 DEFINE_BLOCK(read)
@@ -7,23 +13,22 @@ DEFINE_BLOCK(read)
 	} *state;
 
 	char buf[sizeof b->buf];
-	b->timeout = 5;
+	if (!(b->timeout = strtoul(b->arg + strlen(b->arg) + 1, NULL, 10)))
+		b->timeout = 5;
 	*b->buf = '\0';
 
 	BLOCK_INIT {
-		if ((state->fd = open(b->arg, O_RDONLY | O_NONBLOCK | O_CLOEXEC)) < 0) {
-			state->fd = 0;
+		if ((state->fd = open(b->arg, O_RDONLY | O_CLOEXEC)) < 0) {
 			if (ENOENT != errno)
 				block_strerror("failed to open for read");
-			return;
+			goto fail;
 		}
 	}
 
 	ssize_t len = pread(state->fd, buf, sizeof buf, 0);
 	if (len < 0) {
 		block_strerror("failed to read");
-		close(state->fd), state->fd = 0;
-		return;
+		goto fail;
 	}
 
 	{
@@ -49,4 +54,10 @@ DEFINE_BLOCK(read)
 		memcpy(p, buf, len), p += len;
 		continue;
 	} FORMAT_END;
+
+	return;
+
+fail:
+	close(state->fd);
+	BLOCK_UNINIT;
 }

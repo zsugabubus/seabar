@@ -1,10 +1,11 @@
 /* CFLAGS+=-pthread */
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <unistd.h>
 
 #include "fourmat/fourmat.h"
 
