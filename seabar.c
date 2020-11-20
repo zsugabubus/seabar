@@ -184,7 +184,8 @@ main(int argc, char *argv[])
 		pthread_rwlock_unlock(&buf_lock);
 
 		fputs(is_tty ? "\e[K" : "\n", stdout);
-		fflush(stdout);
+		if (EOF == fflush(stdout))
+			break;
 
 		clock_gettime(
 #ifdef CLOCK_MONOTONIC_COARSE
