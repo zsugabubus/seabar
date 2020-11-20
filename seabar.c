@@ -5,12 +5,13 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
-#include <stdint.h>
 
 #define DEFINE_BLOCK(name) \
 	static void block_##name(Block *const b)
@@ -118,11 +119,9 @@ sig_handler(int signum)
 int
 main(int argc, char *argv[])
 {
-	sigset_t mask;
-	char stdout_buf[BUFSIZ];
+	setpriority(PRIO_PROCESS, 0, PRIO_MAX);
 
 	struct sigaction sa;
-
 	sigfillset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP | SA_NOCLDWAIT;
 
@@ -135,6 +134,7 @@ main(int argc, char *argv[])
 	sa.sa_handler = sig_handler;
 	sigaction(SIGWINCH, &sa, NULL);
 
+	sigset_t mask;
 	sigfillset(&mask);
 	sigdelset(&mask, SIGCHLD);
 	sigdelset(&mask, SIGHUP);
@@ -143,9 +143,9 @@ main(int argc, char *argv[])
 	pthread_sigmask(SIG_SETMASK, &mask, NULL);
 
 	setlocale(LC_ALL, "");
-	setvbuf(stdout, stdout_buf, _IOFBF, sizeof stdout_buf);
 
-	struct timespec timeout = TS_ZERO;
+	char stdout_buf[BUFSIZ];
+	setvbuf(stdout, stdout_buf, _IOFBF, sizeof stdout_buf);
 
 	fds = alloca(sizeof *fds * num_blocks);
 	for (size_t i = 0; i < num_blocks; ++i)
@@ -160,6 +160,8 @@ main(int argc, char *argv[])
 
 	if (is_tty)
 		fputs("\e[s", stdout);
+
+	struct timespec timeout = TS_ZERO;
 
 	for (;;) {
 		struct timespec start;
