@@ -210,7 +210,7 @@ main(int argc, char *argv[])
 				, &elapsed);
 			ts_sub(&elapsed, &start);
 
-			if (ts_cmp(&timeout, &elapsed) <= 0)
+			if (ts_cmp(&timeout, &elapsed) >= 0)
 				ts_sub(&timeout, &elapsed);
 			else
 				timeout = TS_ZERO;
