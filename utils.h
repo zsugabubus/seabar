@@ -49,7 +49,7 @@ acpi_filter(int const fd, char const *const events)
 
 	for (char const *p = buf;;) {
 		char const *pattern = events;
-		for (size_t len; (len = strlen(pattern)); pattern += len)
+		for (size_t len; (len = strlen(pattern)); pattern += len + 1)
 			if (strncmp(buf, pattern, len))
 				return true;
 
