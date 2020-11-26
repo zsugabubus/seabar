@@ -312,17 +312,9 @@ DEFINE_BLOCK(net)
 		char const *address;
 
 		switch (*format) {
-		case '4':
-			address = state->szip_addr;
-			break;
-
-		case '6':
-			address = state->szip6_addr;
-			break;
-
-		case 'm':
-			address = state->szmac_addr;
-			break;
+		case '4': address = state->szip_addr; break;
+		case '6': address = state->szip6_addr; break;
+		case 'm': address = state->szmac_addr; break;
 		}
 		if (!*address)
 			break;
@@ -334,7 +326,10 @@ DEFINE_BLOCK(net)
 
 	case 'a': /* address (IPv4 or IPv6 or MAC) */
 	{
-		char const *const address = (*state->szip_addr ? state->szip_addr : *state->szip6_addr ? state->szip6_addr : state->szmac_addr);
+		char const *const address =
+			( *state->szip_addr  ? state->szip_addr
+			: *state->szip6_addr ? state->szip6_addr
+			: state->szmac_addr);
 		if (!*address)
 			break;
 
