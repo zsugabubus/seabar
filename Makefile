@@ -5,7 +5,7 @@ LDFLAGS +=
 
 TARGET := seabar
 
-$(TARGET) : $(TARGET).c blocks/* config.h config.blocks.h Makefile
+$(TARGET) : $(TARGET).c blocks/* utils.h config.h config.blocks.h Makefile
 	$(CC) $(CFLAGS) -o $@ $< -I. fourmat/fourmat.c
 
 config.h :
