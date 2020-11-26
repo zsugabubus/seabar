@@ -59,11 +59,11 @@ DEFINE_BLOCK(cpu)
 	if (0 < (delta_total = new_total - state->total)) {
 		FORMAT_BEGIN {
 		case 'p': /* busy percent */
-			p += sprintf(p, "%2d%%", 100 - (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
+			p += sprintf(p, "%2u%%", 100U - (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
 			continue;
 
 		case 'P': /* idle percent */
-			p += sprintf(p, "%3d%%", (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
+			p += sprintf(p, "%3u%%", (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
 			continue;
 		} FORMAT_END;
 	}
