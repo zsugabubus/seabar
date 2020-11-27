@@ -7,12 +7,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define SND_CTL_SUBSCRIBE 1
-
 #define block_alsa_strerror(msg) block_errorf(msg ": %s", snd_strerror(err))
+#define block_alsa_die(msg) do { \
+	block_alsa_strerror(msg); \
+	goto fail; \
+} while (0)
 
 DEFINE_BLOCK(alsa)
 {
+	enum { SND_CTL_SUBSCRIBE = 1 };
+
 	struct {
 		snd_ctl_t *ctl;
 		char const *card;
@@ -21,7 +25,7 @@ DEFINE_BLOCK(alsa)
 
 	snd_ctl_event_t *event;
 	snd_mixer_elem_t *elem;
-	snd_mixer_t *mixer;
+	snd_mixer_t *mixer = NULL;
 	int err;
 
 	bool changed = false;
@@ -33,10 +37,10 @@ DEFINE_BLOCK(alsa)
 		state->card = "default";
 
 		if ((err = snd_ctl_open(&state->ctl, state->card, SND_CTL_READONLY)) < 0)
-			block_alsa_strerror("failed to open card");
+			block_alsa_die("failed to open card");
 
 		if ((err = snd_ctl_subscribe_events(state->ctl, SND_CTL_SUBSCRIBE)) < 0)
-			block_alsa_strerror("failed to subscribe to events");
+			block_alsa_die("failed to subscribe to events");
 
 		snd_ctl_nonblock(state->ctl, true);
 
@@ -59,7 +63,7 @@ DEFINE_BLOCK(alsa)
 			if (-EAGAIN == err)
 				break;
 
-			block_alsa_strerror("failed to read event");
+			block_alsa_die("failed to read event");
 		}
 
 		/* is changed? */
@@ -72,26 +76,28 @@ DEFINE_BLOCK(alsa)
 		return;
 
 	if ((err = snd_mixer_open(&mixer, 0)) < 0)
-		block_alsa_strerror("failed to open mixer");
+		block_alsa_die("failed to open mixer");
 
 	if ((err = snd_mixer_attach(mixer, state->card)) < 0)
-		block_alsa_strerror("snd_mixer_attach()");
+		block_alsa_die("snd_mixer_attach()");
 
 	if ((err = snd_mixer_selem_register(mixer, NULL, NULL)) < 0)
-		block_alsa_strerror("snd_mixer_selem_register()");
+		block_alsa_die("snd_mixer_selem_register()");
 
 	if ((err = snd_mixer_load(mixer)) < 0)
-		block_alsa_strerror("snd_mixer_load()");
+		block_alsa_die("snd_mixer_load()");
 
-	if (!(elem = snd_mixer_find_selem(mixer, state->sid)))
-		block_alsa_strerror("snd_mixer_find_selem()");
+	if (!(elem = snd_mixer_find_selem(mixer, state->sid))) {
+		block_errorf("selem not found", NULL);
+		goto fail;
+	}
 
 	int unmuted;
 
 	if (snd_mixer_selem_has_playback_switch(elem)) {
 		if ((err = snd_mixer_selem_get_playback_switch(elem, SND_MIXER_SCHN_MONO, &unmuted)) < 0) {
 			unmuted = 0;
-			block_alsa_strerror("failed to query mute state");
+			block_alsa_die("failed to query mute state");
 		}
 	} else {
 		unmuted = 1;
@@ -122,7 +128,7 @@ DEFINE_BLOCK(alsa)
 		if ((err = snd_mixer_selem_get_playback_dB_range(elem, &min_db, &max_db)) < 0 ||
 		    (err = snd_mixer_selem_get_playback_dB(elem, SND_MIXER_SCHN_MONO, &db)) < 0)
 		{
-			block_alsa_strerror("failed to get volume");
+			block_alsa_die("failed to get volume");
 			break;
 		}
 
@@ -138,4 +144,12 @@ DEFINE_BLOCK(alsa)
 	} FORMAT_END;
 
 	snd_mixer_close(mixer);
+
+	return;
+
+fail:
+	snd_mixer_close(mixer);
+
+	snd_ctl_close(state->ctl);
+	BLOCK_POLLFD->fd = -1;
 }
