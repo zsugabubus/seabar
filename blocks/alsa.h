@@ -30,7 +30,7 @@ DEFINE_BLOCK(alsa)
 
 	bool changed = false;
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		int const mixer_index = 0;
 		char const *mixer_name = b->arg;
 
@@ -152,4 +152,5 @@ fail:
 
 	snd_ctl_close(state->ctl);
 	BLOCK_POLLFD->fd = -1;
+	BLOCK_TEARDOWN;
 }

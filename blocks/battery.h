@@ -16,7 +16,7 @@ DEFINE_BLOCK(battery)
 		int capacity_level_fd;
 	} *state;
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		int const power_supply_fd = open("/sys/class/power_supply", O_FLAGS | O_DIRECTORY);
 		int dir_fd = openat(power_supply_fd, b->arg, O_FLAGS | O_DIRECTORY);
 

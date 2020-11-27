@@ -11,7 +11,7 @@ DEFINE_BLOCK(spawn) {
 
 	struct pollfd *pfd = BLOCK_POLLFD;
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		pid_t pid;
 		int pair[2];
 
@@ -86,6 +86,6 @@ fail:
 	if (!(b->timeout = strtoul(b->arg + strlen(b->arg) + 1, NULL, 10)))
 		b->timeout = 1;
 	close(pfd->fd), pfd->fd = -1;
-	BLOCK_UNINIT;
+	BLOCK_TEARDOWN;
 	return;
 }

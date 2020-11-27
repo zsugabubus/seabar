@@ -18,13 +18,13 @@
 	static void block_##name(Block *const b)
 
 /* initialize internal state of block */
-#define BLOCK_INIT /* { ... } */ \
+#define BLOCK_SETUP /* { ... } */ \
 	if (sizeof *state <= sizeof b->state ? (state = (void *)&b->state, !b->state) : !(state = b->state)) \
 		if (sizeof b->state < sizeof *state && !(state = b->state = malloc(sizeof *state))) \
 			return; \
 		else for (bool once_ = true; once_; once_ = false)
 
-#define BLOCK_UNINIT do { \
+#define BLOCK_TEARDOWN do { \
 	if (sizeof b->state < sizeof *state) \
 		free(b->state); \
 	b->state = NULL; \

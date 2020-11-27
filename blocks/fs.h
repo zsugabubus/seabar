@@ -132,7 +132,7 @@ block_fs_worker(void *arg)
 
 out:
 	close(state->fd);
-	BLOCK_UNINIT;
+	BLOCK_TEARDOWN;
 
 	return (void *)EXIT_SUCCESS;
 }

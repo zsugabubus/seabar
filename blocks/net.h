@@ -71,7 +71,7 @@ DEFINE_BLOCK(net)
 
 	int nlfd;
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		state->last_rx_bytes = 0;
 		state->last_tx_bytes = 0;
 		state->if_state = IF_OPER_UNKNOWN;

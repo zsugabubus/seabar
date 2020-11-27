@@ -15,7 +15,7 @@ DEFINE_BLOCK(backlight)
 		int max_brightness_fd;
 	} *state;
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		int const class_fd = open("/sys/class", O_FLAGS | O_DIRECTORY);
 		int const dir_fd = openat(class_fd, b->arg, O_FLAGS | O_DIRECTORY);
 

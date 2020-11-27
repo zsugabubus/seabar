@@ -15,7 +15,7 @@ DEFINE_BLOCK(cpu)
 
 	char buf[8192];
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		state->total = 0;
 		state->idle = 0;
 

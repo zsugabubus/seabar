@@ -17,7 +17,7 @@ DEFINE_BLOCK(read)
 		b->timeout = 5;
 	*b->buf = '\0';
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		if ((state->fd = open(b->arg, O_RDONLY | O_CLOEXEC)) < 0) {
 			if (ENOENT != errno)
 				block_strerror("failed to open for read");
@@ -59,5 +59,5 @@ DEFINE_BLOCK(read)
 
 fail:
 	close(state->fd);
-	BLOCK_UNINIT;
+	BLOCK_TEARDOWN;
 }

@@ -25,7 +25,7 @@ DEFINE_BLOCK(memory)
 
 	*b->buf = '\0';
 
-	BLOCK_INIT {
+	BLOCK_SETUP {
 		if ((state->fd = open("/proc/meminfo", O_RDONLY)) < 0) {
 			state->fd = 0;
 			block_strerror("failed to open /proc/meminfo");
