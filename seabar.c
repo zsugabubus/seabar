@@ -12,6 +12,7 @@
 #include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
+#include <wordexp.h>
 
 #define DEFINE_BLOCK(name) \
 	static void block_##name(Block *const b)
@@ -147,14 +148,38 @@ main(int argc, char *argv[])
 	char stdout_buf[BUFSIZ];
 	setvbuf(stdout, stdout_buf, _IOFBF, sizeof stdout_buf);
 
-	fds = alloca(sizeof *fds * num_blocks);
-	for (size_t i = 0; i < num_blocks; ++i)
-		fds[i].fd = -1;
-
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGPIPE);
 
 	init();
+
+	fds = alloca(sizeof *fds * num_blocks);
+	for (size_t i = 0; i < num_blocks; ++i)
+		fds[i].fd = -1;
+
+	wordexp_t we = { 0 };
+	for (size_t i = 0; i < num_blocks; ++i) {
+		Block *const b = &blocks[i];
+		int err = 0;
+
+		if (b->arg && !(err = wordexp(b->arg, &we, WRDE_SHOWERR | WRDE_REUSE)) && 0 < we.we_wordc) {
+			size_t size = 0;
+			for (size_t i = 0; i < we.we_wordc; ++i)
+				size += strlen(we.we_wordv[i]) + 1;
+
+			char *p = b->arg = malloc(size);
+
+			for (size_t i = 0; i < we.we_wordc; ++i) {
+				char const *const word = we.we_wordv[i];
+				memcpy(p, word, (size = strlen(word))), p += size;
+				*p++ = ' ';
+			}
+			p[-1] = '\0';
+		} else if (WRDE_SYNTAX == err)
+			block_errorf("invalid syntax", NULL);
+	}
+	if (0 < num_blocks)
+		wordfree(&we);
 
 	bool const is_tty = isatty(STDOUT_FILENO);
 
