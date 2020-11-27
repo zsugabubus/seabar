@@ -13,6 +13,7 @@ DEFINE_BLOCK(battery)
 		int charge_now_fd;
 		int charge_full_fd;
 		int charge_full_design_fd;
+		int capacity_level_fd;
 	} *state;
 
 	BLOCK_INIT {
@@ -24,6 +25,7 @@ DEFINE_BLOCK(battery)
 		state->charge_now_fd = openat(dir_fd, "charge_now", O_FLAGS);
 		state->charge_full_fd = openat(dir_fd, "charge_full", O_FLAGS);
 		state->charge_full_design_fd = openat(dir_fd, "charge_full_design", O_FLAGS);
+		state->capacity_level_fd = openat(dir_fd, "capacity_level", O_FLAGS);
 
 		close(dir_fd);
 		close(power_supply_fd);
@@ -41,6 +43,8 @@ skip_filter:;
 
 	char status[50];
 	size_t status_size = 0;
+	char capacity_level[50];
+	size_t capacity_level_size = 0;
 	unsigned long charge_now = 0;
 	unsigned long charge_full = 0;
 	unsigned long charge_full_design = 0;
@@ -54,6 +58,17 @@ skip_filter:;
 			break;
 
 		memcpy(p, b->arg, size), p += size;
+		continue;
+
+	case 'l': /* capacity level */
+		if (!capacity_level_size) {
+			ssize_t len;
+			if ((len = pread(state->capacity_level_fd, capacity_level, sizeof capacity_level - 1, 0)) < 0)
+				break;
+
+			capacity_level_size = len - (0 < len && '\n' == capacity_level[len - 1]);
+		}
+		memcpy(p, capacity_level, capacity_level_size), p += capacity_level_size;
 		continue;
 
 	case 's': /* status */
