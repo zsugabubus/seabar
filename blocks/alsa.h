@@ -29,7 +29,6 @@ mixer_callback(snd_mixer_t *mixer, unsigned int mask, snd_mixer_elem_t *elem)
 	return 0;
 }
 
-
 DEFINE_BLOCK(alsa)
 {
 	enum { SND_CTL_SUBSCRIBE = 1 };
@@ -52,17 +51,16 @@ DEFINE_BLOCK(alsa)
 		char const *device_name = p ? arg : "default";
 		char const *selem_name = p ? p + 1 : arg;
 
-		snd_ctl_t *ctl;
-		snd_hctl_t *hctl;
-
 		if ((err = snd_mixer_open(&state->mixer, 0)) < 0)
 			block_alsa_die("failed to open state->mixer");
 
 		snd_mixer_set_callback(state->mixer, mixer_callback);
 
+		snd_ctl_t *ctl;
 		if ((err = snd_ctl_open(&ctl, device_name, SND_CTL_NONBLOCK | SND_CTL_READONLY)) < 0)
 			block_alsa_die("failed to open device");
 
+		snd_hctl_t *hctl;
 		if ((err = snd_hctl_open_ctl(&hctl, ctl) < 0)) {
 			snd_ctl_close(ctl);
 			block_alsa_die("failed to open HCTL");
@@ -104,7 +102,9 @@ DEFINE_BLOCK(alsa)
 		}
 
 		struct pollfd *const pfd = BLOCK_POLLFD;
-		assert(1 == snd_ctl_poll_descriptors_count(ctl));
+		if (1 != snd_ctl_poll_descriptors_count(ctl))
+			block_errorf("watching only 1 of %d fds",
+					snd_ctl_poll_descriptors_count(ctl));
 		snd_ctl_poll_descriptors(ctl, pfd, 1);
 	}
 
