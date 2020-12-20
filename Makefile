@@ -5,8 +5,11 @@ LDFLAGS +=
 
 TARGET := seabar
 
-$(TARGET) : $(TARGET).c blocks/* utils.h config.h config.blocks.h Makefile
-	$(CC) $(CFLAGS) -o $@ $< -I. fourmat/fourmat.c
+fourmat/% :
+	git submodule update --init fourmat
+
+$(TARGET) : $(TARGET).c fourmat/fourmat.c blocks/* utils.h config.h config.blocks.h Makefile
+	$(CC) $(CFLAGS) -o $@ -I. $(filter %.c,$^)
 
 config.h :
 	cp config.def.h $@
