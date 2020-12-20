@@ -80,20 +80,12 @@ static Block *blocks;
 static size_t num_blocks;
 static struct pollfd *fds;
 
-static struct timespec elapsed;
-
 #define ANSI_BOLD(text) "\e[1m" text "\e[21m"
 #define ANSI_RGB(r, g, b, text) "\e[38;2;" #r ";" #g ";" #b "m" text "\e[m"
 
 static void init(void);
 
-#include "config.blocks.h"
-#include "config.h"
-
-#undef ANSI_BOLD
-#undef ANSI_RGB
-
-int
+static int
 ts_cmp(struct timespec const *const __restrict__ lhs, struct timespec const *const __restrict__ rhs)
 {
 	if (lhs->tv_sec != rhs->tv_sec)
@@ -104,12 +96,17 @@ ts_cmp(struct timespec const *const __restrict__ lhs, struct timespec const *con
 		return 0;
 }
 
-void
-ts_sub(struct timespec *const __restrict__ lhs, struct timespec const *const __restrict__ rhs)
+static struct timespec
+ts_sub(struct timespec const *const __restrict__ lhs, struct timespec const *const __restrict__ rhs)
 {
-	lhs->tv_sec = lhs->tv_sec - rhs->tv_sec - (lhs->tv_nsec < rhs->tv_nsec);
-	lhs->tv_nsec = (lhs->tv_nsec < rhs->tv_nsec ? NSEC_PER_SEC : 0) + lhs->tv_nsec - rhs->tv_nsec;
+	return (struct timespec){
+		.tv_sec = lhs->tv_sec - rhs->tv_sec - (lhs->tv_nsec < rhs->tv_nsec),
+		.tv_nsec = (lhs->tv_nsec < rhs->tv_nsec ? NSEC_PER_SEC : 0) + lhs->tv_nsec - rhs->tv_nsec,
+	};
 }
+
+#include "config.blocks.h"
+#include "config.h"
 
 static void
 sig_handler(int signum)
@@ -216,40 +213,37 @@ main(int argc, char *argv[])
 
 		clock_gettime(
 #ifdef CLOCK_MONOTONIC_COARSE
-			CLOCK_MONOTONIC_COARSE
+				CLOCK_MONOTONIC_COARSE
 #else
-			CLOCK_MONOTONIC
+				CLOCK_MONOTONIC
 #endif
-			, &start);
+				, &start);
 
-		/* fprintf(stderr, "\n\rtimeout %ld s %09ld ns", timeout.tv_sec, timeout.tv_nsec); */
+		struct timespec elapsed;
 		int res = ppoll(fds, num_blocks, &timeout, &mask);
-
 		if (0 == res) {
 			elapsed = timeout;
 			timeout = TS_ZERO;
 		} else {
 			clock_gettime(
 #ifdef CLOCK_MONOTONIC_COARSE
-				CLOCK_MONOTONIC_COARSE
+					CLOCK_MONOTONIC_COARSE
 #else
-				CLOCK_MONOTONIC
+					CLOCK_MONOTONIC
 #endif
-				, &elapsed);
-			ts_sub(&elapsed, &start);
+					, &elapsed);
+			elapsed = ts_sub(&elapsed, &start);
 
 			if (ts_cmp(&timeout, &elapsed) >= 0)
-				ts_sub(&timeout, &elapsed);
+				timeout = ts_sub(&timeout, &elapsed);
 			else
 				timeout = TS_ZERO;
 		}
-		/* fprintf(stderr, "\r\nelapsed %ld s %09lld ns\n", elapsed.tv_sec, elapsed.tv_nsec); */
 
 		for (size_t i = 0; i < num_blocks; ++i) {
 			Block *const b = &blocks[i];
 
 			if (fds[i].revents || b->timeout <= elapsed.tv_sec) {
-				/* fprintf(stderr, "updating block #%d\n", i); */
 				b->timeout = UINT_MAX;
 				b->poll(b);
 			} else if (b->timeout > elapsed.tv_sec) {

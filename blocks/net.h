@@ -27,6 +27,8 @@ DEFINE_BLOCK(net)
 {
 	struct {
 		unsigned long long last_rx_bytes, last_tx_bytes;
+		struct timespec last_update;
+
 		unsigned if_index;
 		int if_state;
 
@@ -272,15 +274,29 @@ DEFINE_BLOCK(net)
 	case IF_OPER_UP:
 	case IF_OPER_DORMANT:
 	{
-		uint64_t const elapsed_ns = elapsed.tv_sec * NSEC_PER_SEC + elapsed.tv_nsec;
-		if (0 < elapsed_ns) {
-			rx_rate = (rx_bytes - state->last_rx_bytes) * NSEC_PER_SEC / elapsed_ns;
-			tx_rate = (tx_bytes - state->last_tx_bytes) * NSEC_PER_SEC / elapsed_ns;
-		}
+		struct timespec now;
+		clock_gettime(
+#ifdef CLOCK_MONOTONIC_COARSE
+				CLOCK_MONOTONIC_COARSE
+#else
+				CLOCK_MONOTONIC
+#endif
+				, &now);
+
+		struct timespec elapsed = ts_sub(&now, &state->last_update);
+		uint64_t elapsed_ns = elapsed.tv_sec * NSEC_PER_SEC + elapsed.tv_nsec;
+		rx_rate = (rx_bytes - state->last_rx_bytes) * NSEC_PER_SEC / elapsed_ns;
+		tx_rate = (tx_bytes - state->last_tx_bytes) * NSEC_PER_SEC / elapsed_ns;
 
 		state->last_rx_bytes = rx_bytes;
 		state->last_tx_bytes = tx_bytes;
+		state->last_update = now;
 	}
+		break;
+
+	default:
+		state->last_rx_bytes = 0;
+		state->last_tx_bytes = 0;
 		break;
 	}
 

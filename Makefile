@@ -3,6 +3,8 @@ BLOCK_CFLAGS := $(shell sed -n '/block_[a-z_]*/{s|.*block_\([a-z_]*\).*|blocks/\
 CFLAGS += $(BLOCK_CFLAGS)
 LDFLAGS +=
 
+RM ?= rm -f
+
 TARGET := seabar
 
 fourmat/% :
@@ -23,4 +25,7 @@ run : $(TARGET)
 debug : $(TARGET)
 	gdb $< -ex run
 
-.PHONY : debug run
+clean :
+	$(RM) $(TARGET) config.blocks.h
+
+.PHONY : debug run clean
