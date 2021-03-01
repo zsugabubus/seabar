@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blocks/seabar.h"
+
 DEFINE_BLOCK(spawn) {
 	struct {
 		char line[sizeof b->buf];
@@ -60,8 +62,12 @@ DEFINE_BLOCK(spawn) {
 	}
 
 	FORMAT_BEGIN {
-	case 's': /* output if not empty */
-	case 'S': /* output */
+	case 'b': /* Process output as bar command. */
+		block_seabar(&(Block){ .format = state->line });
+		continue;
+
+	case 's': /* Output if not empty. */
+	case 'S': /* Output. */
 		size = state->line_size - (state->line_size && '\n' == state->line[state->line_size - 1]);
 		if (!size && 's' == *format)
 			break;

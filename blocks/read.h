@@ -38,19 +38,19 @@ DEFINE_BLOCK(read)
 	}
 
 	FORMAT_BEGIN {
-	case 'n': /* number */
+	case 'n': /* Number. */
 		p += fmt_number(p, strtoull(buf, NULL, 10));
 		continue;
 
-	case 'i': /* IEC number */
+	case 'i': /* iEC number. */
 		p += fmt_space(p, strtoull(buf, NULL, 10));
 		continue;
 
-	case 's': /* SI number */
+	case 's': /* sI number. */
 		p += fmt_speed(p, strtoull(buf, NULL, 10));
 		continue;
 
-	case 's': /* string */
+	case 's': /* String. */
 		memcpy(p, buf, len), p += len;
 		continue;
 	} FORMAT_END;

@@ -36,7 +36,6 @@
 #define FORMAT_BEGIN \
 { \
 	char *p = b->buf; \
-	size_t size; \
 	for (char *format = b->format; *format && '\t' != *format; ++format) { \
 		if ('%' == *format) { \
 			switch (*++format)
@@ -63,8 +62,8 @@
 #define block_errorf(msg, ...) fprintf(stderr, "[%s \"%s\"] " msg "\n", __FUNCTION__, b->arg, __VA_ARGS__)
 #define block_strerror(msg) block_errorf(msg ": %s", strerror(errno))
 
-typedef struct block Block;
-struct block {
+typedef struct Block Block;
+struct Block {
 	unsigned const group;
 	void(*const poll)(Block *);
 	char *arg;
@@ -103,6 +102,19 @@ ts_sub(struct timespec const *const __restrict__ lhs, struct timespec const *con
 		.tv_sec = lhs->tv_sec - rhs->tv_sec - (lhs->tv_nsec < rhs->tv_nsec),
 		.tv_nsec = (lhs->tv_nsec < rhs->tv_nsec ? NSEC_PER_SEC : 0) + lhs->tv_nsec - rhs->tv_nsec,
 	};
+}
+
+static int
+sprint(char **p, char const *str)
+{
+	size_t str_size = str ? strlen(str) : 0;
+	if (!str_size)
+		return 0;
+
+	memcpy(*p, str, str_size);
+	*p += str_size;
+
+	return 1;
 }
 
 #include "config.blocks.h"

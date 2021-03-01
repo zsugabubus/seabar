@@ -11,11 +11,9 @@ DEFINE_BLOCK(hostname)
 	}
 
 	FORMAT_BEGIN {
-	case 'n': /* hostname */
-		if (!(size = strlen(host)))
+	case 'n': /* Hostname. */
+		if (!sprint(&p, host))
 			break;
-
-		memcpy(p, host, size), p += size;
 		continue;
 	} FORMAT_END
 }

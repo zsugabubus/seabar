@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "blocks/seabar.h"
+
 #define block_alsa_strerror(msg) block_errorf(msg ": %s", snd_strerror(err))
 #define block_alsa_die(msg) do { \
 	block_alsa_strerror(msg); \
@@ -113,50 +115,56 @@ DEFINE_BLOCK(alsa)
 		return;
 	changed = false;
 
-	int unmuted;
-	if (snd_mixer_selem_has_playback_switch(state->elem)) {
-		if ((err = snd_mixer_selem_get_playback_switch(state->elem, SND_MIXER_SCHN_MONO, &unmuted)) < 0)
-			block_alsa_die("failed to query mute state");
-	} else {
-		unmuted = 1;
-	}
+#define S(prefix, postfix) (capture ? prefix##capture##postfix : prefix##playback##postfix)
+
+	int capture = 0;
+	int unmuted = 0;
 
 	FORMAT_BEGIN {
-	case 'U': /* if unmuted */
+	case 'C': /* Capture. */
+	case 'P': /* Playback. */
+		capture = 'C' == *format;
+		if (S(snd_mixer_selem_get_, _switch)(state->elem, SND_MIXER_SCHN_MONO, &unmuted) < 0)
+			unmuted = 1;
+		continue;
+
+	case 'U': /* If unmuted. */
 		if (unmuted)
 			continue;
 		break;
 
-	case 'M': /* if muted */
+	case 'M': /* If muted. */
 		if (!unmuted)
 			continue;
 		break;
 
-	case 'n': /* name */
-		size = strlen(state->name);
-		memcpy(p, state->name, size), p += size;
+	case 'n': /* Name. */
+		sprint(&p, state->name);
 		continue;
 
-	case 'c': /* card name */
-		if (state->card_name) {
-			size = strlen(state->card_name);
-			memcpy(p, state->card_name, size), p += size;
-		}
+	case 'c': /* Card name. */
+		sprint(&p, state->card_name);
 		continue;
 
-	case 'i': /* speaker icon */
+	case 'i': /* Icon. */
 	{
-		char const *const icon = unmuted ? "\xef\xa9\xbd" : "\xef\xaa\x80";
-		size = strlen(icon);
-		memcpy(p, icon, size), p += size;
+		char const *const icon = use_text_icon
+			? (unmuted
+				? (!capture ? "PLAY " : "CAPT ")
+				: (!capture ? "PMUT " : "CMUT "))
+			: (!capture
+				? (unmuted ? "\xef\xa9\xbd" : "\xef\xaa\x80")
+				: (unmuted ? "\xef\x84\xb0 " : "\xef\x84\xb1 "));
+
+		sprint(&p, icon);
 	}
 		continue;
 
-	case 'p': /* volume in percent */
+	case 'p': /* Volume in percent. */
 	{
 		long vol, min_vol, max_vol;
-		if ((err = snd_mixer_selem_get_playback_volume_range(state->elem, &min_vol, &max_vol)) < 0 ||
-		    (err = snd_mixer_selem_get_playback_volume(state->elem, SND_MIXER_SCHN_MONO, &vol)) < 0)
+		if ((err = S(snd_mixer_selem_get_, _volume_range)(state->elem, &min_vol, &max_vol)) < 0 ||
+		    (err = S(snd_mixer_selem_get_, _volume)(state->elem, SND_MIXER_SCHN_MONO, &vol)) < 0)
 		{
 			block_alsa_die("failed to get volume");
 			break;
@@ -166,26 +174,25 @@ DEFINE_BLOCK(alsa)
 	}
 		continue;
 
-	case 'd': /* volume in decibel */
+	case 'd': /* Volume in decibel. */
 	{
 		long db, min_db, max_db;
-		if ((err = snd_mixer_selem_get_playback_dB_range(state->elem, &min_db, &max_db)) < 0 ||
-		    (err = snd_mixer_selem_get_playback_dB(state->elem, SND_MIXER_SCHN_MONO, &db)) < 0)
+		if ((err = S(snd_mixer_selem_get_, _dB_range)(state->elem, &min_db, &max_db)) < 0 ||
+		    (err = S(snd_mixer_selem_get_, _dB)(state->elem, SND_MIXER_SCHN_MONO, &db)) < 0)
 		{
 			block_alsa_die("failed to get volume");
 			break;
 		}
 
-		if (min_db < db) {
+		if (min_db < db)
 			p += sprintf(p, "%ddB", db / 100);
-		} else {
-			static char const *const MINUS_INF = "-\xe2\x88\x9e" "dB";
-			size = strlen(MINUS_INF);
-			memcpy(p, MINUS_INF, size), p += size;
-		}
+		else
+			sprint(&p, "-\xe2\x88\x9e" "dB" /* Minus infinity. */);
 	}
 		continue;
 	} FORMAT_END;
+
+#undef S
 
 	return;
 

@@ -36,7 +36,7 @@ DEFINE_BLOCK(backlight)
 
 	if (!acpi_filter(BLOCK_POLLFD->fd,
 	                 "video/brightness\0"
-	                 /* unknown/vendor (probably leds/...) */
+	                 /* Unknown/vendor (probably leds/...). */
 	                 " \0"))
 		return;
 skip_filter:;
@@ -61,12 +61,12 @@ skip_filter:;
 	}
 
 	FORMAT_BEGIN {
-	case 'l': /* any light? */
+	case 'l': /* Any light? */
 		if (enabled && 0 < brightness)
 			continue;
 		break;
 
-	case 'i': /* icon */
+	case 'i': /* Icon. */
 	{
 		if (!enabled)
 			break;
@@ -82,7 +82,7 @@ skip_filter:;
 	}
 		continue;
 
-	case 'o': /* on/off */
+	case 'o': /* on/off. */
 	case 'O': /* ON/OFF */
 	{
 		static char LABELS[2][2][4] = {
@@ -96,15 +96,15 @@ skip_filter:;
 	}
 		continue;
 
-	case 'b': /* brightness */
-	case 'B': /* maximum brightness */
+	case 'b': /* Brightness. */
+	case 'B': /* Maximum brightness. */
 		if (!enabled)
 			break;
 
 		p += sprintf(p, "%lu", 'b' == *format ? brightness : max_brightness);
 		continue;
 
-	case 'p': /* percent */
+	case 'p': /* Percent. */
 		if (!enabled)
 			break;
 

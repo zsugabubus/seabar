@@ -4,7 +4,7 @@
 DEFINE_BLOCK(loadavg)
 {
 	FORMAT_BEGIN {
-	case 's': /* 1, 5, 15 minute samples */
+	case 's': /* 1, 5, 15 minute samples. */
 	{
 		double loadavg[3];
 		if (getloadavg(loadavg, ARRAY_SIZE(loadavg)) < 0)

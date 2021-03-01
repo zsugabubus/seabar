@@ -52,15 +52,12 @@ skip_filter:;
 	bool poll = false;
 
 	FORMAT_BEGIN {
-	case 'n': /* name */
-		size = strlen(b->arg);
-		if (!size)
+	case 'n': /* Name. */
+		if (!sprint(&p, b->arg))
 			break;
-
-		memcpy(p, b->arg, size), p += size;
 		continue;
 
-	case 'l': /* capacity level */
+	case 'l': /* Capacity level. */
 		if (!capacity_level_size) {
 			ssize_t len;
 			if ((len = pread(state->capacity_level_fd, capacity_level, sizeof capacity_level - 1, 0)) < 0)
@@ -71,8 +68,8 @@ skip_filter:;
 		memcpy(p, capacity_level, capacity_level_size), p += capacity_level_size;
 		continue;
 
-	case 's': /* status */
-	case 'F': /* not full? */
+	case 's': /* Status. */
+	case 'F': /* Not full? */
 		if (!status_size) {
 			ssize_t len;
 			if ((len = pread(state->status_fd, status, sizeof status - 1, 0)) < 0)
@@ -89,7 +86,7 @@ skip_filter:;
 		}
 		continue;
 
-	case 'p': /* charge percent */
+	case 'p': /* Charge percent. */
 		if (!charge_now)
 			charge_now = readul(state->charge_now_fd);
 
@@ -103,7 +100,7 @@ skip_filter:;
 		poll = true;
 		continue;
 
-	case 'P': /* maximum percent (health) */
+	case 'P': /* Maximum percent (health). */
 		if (!charge_full)
 			charge_full = readul(state->charge_full_fd);
 

@@ -50,23 +50,23 @@ DEFINE_BLOCK(memory)
 	}
 
 	FORMAT_BEGIN {
-	case 'u': /* used */
+	case 'u': /* Used. */
 		p += fmt_space(p, (total_kib - avail_kib) << 10);
 		continue;
 
-	case 'p': /* used percent */
+	case 'p': /* Used percent. */
 		p += fmt_percent(p, total_kib - avail_kib, total_kib);
 		continue;
 
-	case 'a': /* available */
+	case 'a': /* Available. */
 		p += fmt_space(p, avail_kib << 10);
 		continue;
 
-	case 'P': /* available percent */
+	case 'P': /* Available percent. */
 		p += fmt_percent(p, avail_kib, total_kib);
 		continue;
 
-	case 't': /* total */
+	case 't': /* Total. */
 		p += fmt_space(p, total_kib << 10);
 		continue;
 	} FORMAT_END;

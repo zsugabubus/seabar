@@ -8,16 +8,17 @@
 #include <unistd.h>
 
 #include "fourmat/fourmat.h"
+#include "blocks/seabar.h"
 
-struct block_fs_state {
+typedef struct {
 	int fd;
-};
+} BlockFSContext;
 
 static void *
 block_fs_worker(void *arg)
 {
 	Block *const b = arg;
-	DEFINE_BLOCK_STATE(struct block_fs_state);
+	DEFINE_BLOCK_STATE(BlockFSContext);
 
 	struct statvfs st;
 	int const res = statvfs(b->arg, &st);
@@ -28,45 +29,46 @@ block_fs_worker(void *arg)
 
 	pthread_rwlock_rdlock(&buf_lock);
 	FORMAT_BEGIN {
-	case 'i': /* basic fs icon */
+	case 'i': /* Basic fs icon. */
 	{
 		if (res < 0)
 			break;
 
 		char const *icon;
 		switch (st.f_fsid) {
-		case 0/* tmpfs */: icon = "\xef\x82\xae "; break;
-		default:           icon = "\xef\x9f\x89 "; break;
+		case 0 /* tmpfs */: icon = "\xef\x82\xae \0" "MEM "; break;
+		default:            icon = "\xef\x9f\x89 \0" "DISK "; break;
 		}
-		size_t const icon_size = strlen(icon);
-		memcpy(p, icon, icon_size), p += icon_size;
+
+		if (use_text_icon)
+			icon += strlen(icon) + 1 /* NUL */;
+		sprint(&p, icon);
 	}
 		continue;
 
-	case 'n': /* name */
+	case 'n': /* Name. */
 	{
 		char const *name = strrchr(b->arg, '/');
 		name = name ? name + 1 : b->arg;
-		size_t const name_size = strlen(name);
-		memcpy(p, name, name_size), p += name_size;
+		sprint(&p, name);
 	}
 		continue;
 
-	case 'a': /* available (free space for unprivileged users) */
+	case 'a': /* Available (free space for unprivileged users). */
 		if (res < 0)
 			break;
 
 		p += fmt_space(p, avail_size);
 		continue;
 
-	case 'P': /* available percent */
+	case 'P': /* Available percent. */
 		if (res < 0)
 			break;
 
 		p += fmt_percent(p, avail_size, total_size);
 		continue;
 
-	case 'f': /* free */
+	case 'f': /* Free. */
 	{
 		if (res < 0)
 			break;
@@ -75,28 +77,28 @@ block_fs_worker(void *arg)
 	}
 		continue;
 
-	case 'u': /* used */
+	case 'u': /* Used. */
 		if (res < 0)
 			break;
 
 		p += fmt_space(p, total_size - free_size);
 		continue;
 
-	case 'p': /* used percent */
+	case 'p': /* Used percent. */
 		if (res < 0)
 			break;
 
 		p += fmt_percent(p, total_size - avail_size, total_size);
 		continue;
 
-	case 't': /* total */
+	case 't': /* Total. */
 		if (res < 0)
 			break;
 
 		p += fmt_space(p, total_size);
 		continue;
 
-	case 'F': /* flags */
+	case 'F': /* Flags. */
 		if (res < 0)
 			break;
 
@@ -105,14 +107,14 @@ block_fs_worker(void *arg)
 		*p++ = st.f_flag & ST_NOSUID ? '-' : 's';
 		continue;
 
-	case 'c': /* file count */
+	case 'c': /* File count. */
 		if (res < 0)
 			break;
 
 		p += sprintf(p, "%ld", st.f_files);
 		continue;
 
-	case 'r': /* '*' if read-only */
+	case 'r': /* '*' if read-only. */
 		if (res < 0)
 			break;
 
@@ -120,12 +122,12 @@ block_fs_worker(void *arg)
 			*p++ = '*';
 		continue;
 
-	case 'R': /* '[RO]' if read-only */
+	case 'R': /* '[RO]' if read-only. */
 		if (res < 0)
 			break;
 
 		if (st.f_flag & ST_RDONLY)
-			memcpy(p, "[RO]", 4), p += 4;
+			sprint(&p, "[RO]");
 		continue;
 	} FORMAT_END;
 	pthread_rwlock_unlock(&buf_lock);
@@ -143,7 +145,7 @@ DEFINE_BLOCK(fs)
 
 	struct pollfd *pfd = BLOCK_POLLFD;
 	if (pfd->fd < 0) {
-		DEFINE_BLOCK_STATE(struct block_fs_state);
+		DEFINE_BLOCK_STATE(BlockFSContext);
 		int pair[2];
 
 		pipe(pair);

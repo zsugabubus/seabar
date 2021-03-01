@@ -49,8 +49,8 @@ DEFINE_BLOCK(cpu)
 		uint64_t const val = strtoull(p, &p, 10);
 		new_total += val;
 		switch (i) {
-		case 3/* idle */:
-		case 4/* iowait */:
+		case 3 /* Idle. */:
+		case 4 /* Iowait. */:
 			new_idle += val;
 		}
 	}
@@ -58,11 +58,11 @@ DEFINE_BLOCK(cpu)
 	delta_idle = new_idle - state->idle;
 	if (0 < (delta_total = new_total - state->total)) {
 		FORMAT_BEGIN {
-		case 'p': /* busy percent */
+		case 'p': /* Busy percent. */
 			p += sprintf(p, "%2u%%", 100U - (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
 			continue;
 
-		case 'P': /* idle percent */
+		case 'P': /* Idle percent. */
 			p += sprintf(p, "%3u%%", (unsigned)((UINT64_C(100) * delta_idle) / delta_total));
 			continue;
 		} FORMAT_END;

@@ -6,24 +6,32 @@
 
 DEFINE_BLOCK(user)
 {
+	struct passwd const *pw = getpwuid(geteuid());
+
 	FORMAT_BEGIN {
-	case 'u': /* uid */
+	case 'u': /* UID. */
 		p += sprintf(p, "%u", (unsigned)geteuid());
 		continue;
 
-	case 'g': /* gid */
+	case 'g': /* GID. */
 		p += sprintf(p, "%u", (unsigned)geteuid());
 		continue;
 
-	case 'n': /* username */
+	case 'n': /* Username. */
 	{
-		struct passwd *pw;
-
-		if (!(pw = getpwuid(geteuid())))
+		if (!pw)
 			break;
 
-		size = strlen(pw->pw_name);
-		memcpy(p, pw->pw_name, size), p += size;
+		sprint(&p, pw->pw_name);
+	}
+		continue;
+
+	case 'h': /* Home directory. */
+	{
+		if (!pw)
+			break;
+
+		sprint(&p, pw->pw_dir);
 	}
 		continue;
 	} FORMAT_END;

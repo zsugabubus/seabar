@@ -1,7 +1,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <net/if.h> /* must be here because of improper include guards */
+#include <net/if.h> /* Must be here because of improper include guards. */
 #include <linux/ethtool.h>
 #include <linux/limits.h>
 #include <linux/netlink.h>
@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "fourmat/fourmat.h"
+#include "blocks/seabar.h"
 
 DEFINE_BLOCK(net)
 {
@@ -82,7 +83,7 @@ DEFINE_BLOCK(net)
 		*state->szip6_addr = '\0';
 		*state->szmac_addr = '\0';
 		*state->szlink_speed = '\0';
-		state->icon = "\0";
+		state->icon = "";
 
 		if (!(state->if_index = if_nametoindex(if_name))) {
 			block_strerror("failed to find interface");
@@ -110,7 +111,7 @@ DEFINE_BLOCK(net)
 		ifa = NLMSG_DATA(nlh);
 		ifa->ifa_family = AF_UNSPEC;
 		ifa->ifa_prefixlen = 0;
-		ifa->ifa_flags = 0/* must be zero */;
+		ifa->ifa_flags = 0 /* Must be zero. */;
 		ifa->ifa_scope = RT_SCOPE_UNIVERSE;
 		ifa->ifa_index = state->if_index;
 
@@ -170,8 +171,9 @@ DEFINE_BLOCK(net)
 				ifa = NULL;
 
 				switch (ifi->ifi_type) {
-				case ARPHRD_ETHER: state->icon = "\xef\x9b\xbf "; break;
-				default:           state->icon = "\xef\xaf\xb1 "; break;
+				case ARPHRD_ETHER:    state->icon = "\xef\x9b\xbf \0" "ETH "; break;
+				case ARPHRD_LOOPBACK: state->icon = "\0" "LO "; break;
+				default:              state->icon = "\0";
 				}
 
 				*state->essid = '\0';
@@ -179,11 +181,11 @@ DEFINE_BLOCK(net)
 
 				struct iwreq iwr;
 				strncpy(iwr.ifr_name, if_name, sizeof iwr.ifr_name);
-				/* is wireless? */
+				/* Is wireless? */
 				if (!ioctl(sfd, SIOCGIWNAME, &iwr)) {
 					struct iw_statistics iwstat;
 
-					state->icon = "\xef\x87\xab ";
+					state->icon = "\xef\x87\xab \0" "WLAN ";
 
 					iwr.u.data.pointer = &iwstat;
 					iwr.u.data.length = sizeof(iwstat);
@@ -205,6 +207,13 @@ DEFINE_BLOCK(net)
 						fmt_speed(state->szlink_speed, iwr.u.bitrate.value);
 
 				}
+
+				if (use_text_icon)
+					state->icon += strlen(state->icon) + 1 /* NUL */;
+
+				if (!*state->icon)
+					state->icon = !use_text_icon ? "\xef\xaf\xb1 " : "OTH ";
+
 			}
 				break;
 
@@ -270,7 +279,7 @@ DEFINE_BLOCK(net)
 	uint64_t rx_rate = 0, tx_rate = 0;
 
 	switch (state->if_state) {
-	case IF_OPER_UNKNOWN: /* for loopback */
+	case IF_OPER_UNKNOWN: /* For loopback. */
 	case IF_OPER_UP:
 	case IF_OPER_DORMANT:
 	{
@@ -301,29 +310,29 @@ DEFINE_BLOCK(net)
 	}
 
 	FORMAT_BEGIN {
-	case 'U': /* if up */
-		if (IF_OPER_UP == state->if_state)
+	case 'U': /* If up. */
+		/* We test whether it is not down since loopback interface has
+		 * unknown state. */
+		if (IF_OPER_DOWN != state->if_state)
 			continue;
 		break;
 
-	case 'D': /* if down */
+	case 'D': /* If down. */
 		if (IF_OPER_DOWN == state->if_state)
 			continue;
 		break;
 
-	case 'n': /* name */
-		size = strlen(b->arg);
-		memcpy(p, b->arg, size), p += size;
+	case 'n': /* Name. */
+		sprint(&p, b->arg);
 		continue;
 
-	case 'i': /* interface icon */
-		size = strlen(state->icon);
-		memcpy(p, state->icon, size), p += size;
+	case 'i': /* Interface icon. */
+		sprint(&p, state->icon);
 		continue;
 
-	case '4': /* IPv4 address */
-	case '6': /* IPv6 address */
-	case 'm': /* MAC address */
+	case '4': /* IPv4 address. */
+	case '6': /* IPv6 address. */
+	case 'm': /* MAC address. */
 	{
 		char const *address;
 
@@ -332,49 +341,42 @@ DEFINE_BLOCK(net)
 		case '6': address = state->szip6_addr; break;
 		case 'm': address = state->szmac_addr; break;
 		}
-		if (!*address)
-			break;
 
-		size = strlen(address);
-		memcpy(p, address, size), p += size;
+		if (!sprint(&p, address))
+			break;
 	}
 		break;
 
-	case 'a': /* address (IPv4 or IPv6 or MAC) */
+	case 'a': /* Address (IPv4 or IPv6 or MAC). */
 	{
 		char const *const address =
 			( *state->szip_addr  ? state->szip_addr
 			: *state->szip6_addr ? state->szip6_addr
 			: state->szmac_addr);
-		if (!*address)
-			break;
 
-		size = strlen(address);
-		memcpy(p, address, size), p += size;
+		if (!sprint(&p, address))
+			break;
 	}
 		continue;
 
-	case 'e': /* ESSID */
-		if (!*state->essid)
+	case 'e': /* ESSID. */
+		if (!sprint(&p, state->essid))
 			break;
-
-		size = strlen(state->essid);
-		memcpy(p, state->essid, size), p += size;
 		continue;
 
-	case 'R': /* receive total */
+	case 'R': /* Receive total. */
 		p += fmt_space(p, rx_bytes);
 		continue;
 
-	case 'r': /* receive rate */
+	case 'r': /* Receive rate. */
 		p += fmt_speed(p, rx_rate);
 		continue;
 
-	case 'T': /* transfer total */
+	case 'T': /* Transfer total. */
 		p += fmt_space(p, tx_bytes);
 		continue;
 
-	case 't': /* transfer rate */
+	case 't': /* Transfer rate. */
 		p += fmt_speed(p, tx_rate);
 		continue;
 	} FORMAT_END;
